@@ -9,7 +9,7 @@ import (
 	"reflect"
 	"unsafe"
 
-	"github.com/aristanetworks/goarista/areflect"
+	"github.com/teachain/goarista/areflect"
 )
 
 // blocks are used to keep track of which memory areas were already

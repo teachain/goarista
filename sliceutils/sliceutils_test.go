@@ -7,7 +7,7 @@ package sliceutils
 import (
 	"testing"
 
-	"github.com/aristanetworks/goarista/test"
+	"github.com/teachain/goarista/test"
 )
 
 func TestToAnySlice(t *testing.T) {

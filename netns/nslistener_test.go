@@ -14,8 +14,8 @@ import (
 	"sync"
 	"testing"
 
-	"github.com/aristanetworks/goarista/glog"
-	"github.com/aristanetworks/goarista/logger"
+	"github.com/teachain/goarista/glog"
+	"github.com/teachain/goarista/logger"
 )
 
 type mockListener struct {

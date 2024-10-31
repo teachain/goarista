@@ -8,8 +8,8 @@ import (
 	"os"
 	"sync"
 
-	"github.com/aristanetworks/goarista/kafka"
-	"github.com/aristanetworks/goarista/kafka/gnmi"
+	"github.com/teachain/goarista/kafka"
+	"github.com/teachain/goarista/kafka/gnmi"
 
 	"github.com/IBM/sarama"
 	"github.com/aristanetworks/glog"

@@ -16,7 +16,7 @@ import (
 	"time"
 
 	"github.com/aristanetworks/fsnotify"
-	"github.com/aristanetworks/goarista/logger"
+	"github.com/teachain/goarista/logger"
 )
 
 // ListenerCreator is the signature of a function which creates a listener,

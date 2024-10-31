@@ -7,7 +7,7 @@ package main
 import (
 	"testing"
 
-	"github.com/aristanetworks/goarista/test"
+	"github.com/teachain/goarista/test"
 )
 
 func TestConfig(t *testing.T) {

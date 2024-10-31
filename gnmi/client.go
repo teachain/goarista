@@ -17,7 +17,7 @@ import (
 	"slices"
 	"strings"
 
-	"github.com/aristanetworks/goarista/netns"
+	"github.com/teachain/goarista/netns"
 	pb "github.com/openconfig/gnmi/proto/gnmi"
 	"github.com/openconfig/gnmi/proto/gnmi_ext"
 	"google.golang.org/grpc"

@@ -10,8 +10,8 @@ import (
 	"sync"
 	"testing"
 
-	"github.com/aristanetworks/goarista/kafka/gnmi"
-	"github.com/aristanetworks/goarista/test"
+	"github.com/teachain/goarista/kafka/gnmi"
+	"github.com/teachain/goarista/test"
 
 	"github.com/IBM/sarama"
 	pb "github.com/openconfig/gnmi/proto/gnmi"

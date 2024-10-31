@@ -10,7 +10,7 @@ installing Go can be found [here](https://go.dev/doc/install). Once Go
 is installed you can run:
 
 ```
-go install github.com/aristanetworks/goarista/cmd/gnmi@latest
+go install github.com/teachain/goarista/cmd/gnmi@latest
 ```
 
 This will install the `gnmi` binary in the `$HOME/go/bin` directory by

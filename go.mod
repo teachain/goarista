@@ -1,4 +1,4 @@
-module github.com/aristanetworks/goarista
+module github.com/teachain/goarista
 
 go 1.23.2
 

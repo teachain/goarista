@@ -14,7 +14,7 @@ import (
 	"strings"
 	"syscall"
 
-	"github.com/aristanetworks/goarista/logger"
+	"github.com/teachain/goarista/logger"
 	"golang.org/x/sys/unix"
 )
 

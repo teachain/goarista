@@ -4,7 +4,7 @@
 
 package path
 
-import "github.com/aristanetworks/goarista/key"
+import "github.com/teachain/goarista/key"
 
 // Wildcard is a special element in a path that is used by Map
 // and the Match* functions to match any other element.

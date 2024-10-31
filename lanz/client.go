@@ -14,8 +14,8 @@ import (
 	"sync"
 	"time"
 
-	pb "github.com/aristanetworks/goarista/lanz/proto"
-	"github.com/aristanetworks/goarista/logger"
+	pb "github.com/teachain/goarista/lanz/proto"
+	"github.com/teachain/goarista/logger"
 
 	"google.golang.org/protobuf/proto"
 )

@@ -14,7 +14,7 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/aristanetworks/goarista/gnmi"
+	"github.com/teachain/goarista/gnmi"
 
 	"github.com/aristanetworks/glog"
 	pb "github.com/openconfig/gnmi/proto/gnmi"

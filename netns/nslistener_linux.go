@@ -9,8 +9,8 @@ import (
 	"net"
 	"os"
 
-	"github.com/aristanetworks/goarista/dscp"
-	"github.com/aristanetworks/goarista/logger"
+	"github.com/teachain/goarista/dscp"
+	"github.com/teachain/goarista/logger"
 )
 
 var hasMount = func(mountPoint string, logger logger.Logger) bool {

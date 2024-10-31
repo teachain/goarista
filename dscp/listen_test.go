@@ -8,7 +8,7 @@ import (
 	"net"
 	"testing"
 
-	"github.com/aristanetworks/goarista/dscp"
+	"github.com/teachain/goarista/dscp"
 )
 
 func TestListenTCPWithTOS(t *testing.T) {

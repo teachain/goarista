@@ -12,7 +12,7 @@ import (
 	"time"
 
 	"github.com/aristanetworks/glog"
-	"github.com/aristanetworks/goarista/gnmireverse"
+	"github.com/teachain/goarista/gnmireverse"
 	"github.com/openconfig/gnmi/proto/gnmi"
 	"golang.org/x/sync/errgroup"
 	"google.golang.org/grpc"

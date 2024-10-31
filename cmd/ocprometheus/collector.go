@@ -16,8 +16,8 @@ import (
 	"golang.org/x/net/context"
 
 	"github.com/aristanetworks/glog"
-	"github.com/aristanetworks/goarista/gnmi"
-	gnmiUtils "github.com/aristanetworks/goarista/gnmi"
+	"github.com/teachain/goarista/gnmi"
+	gnmiUtils "github.com/teachain/goarista/gnmi"
 	pb "github.com/openconfig/gnmi/proto/gnmi"
 	"github.com/prometheus/client_golang/prometheus"
 	"google.golang.org/protobuf/proto"

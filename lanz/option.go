@@ -7,7 +7,7 @@ package lanz
 import (
 	"time"
 
-	"github.com/aristanetworks/goarista/logger"
+	"github.com/teachain/goarista/logger"
 )
 
 // Option is a LANZ client factory option.

@@ -12,7 +12,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/aristanetworks/goarista/key"
+	"github.com/teachain/goarista/key"
 	pb "google.golang.org/protobuf/types/known/durationpb"
 )
 
@@ -75,8 +75,8 @@ func generateFunc() func() {
 
 // both of these functions are generated, but will both will be assigned distinct anonymous names,
 // for example:
-// generatedFuncA would be github.com/aristanetworks/goarista/test.init.func1
-// generatedFuncB would be github.com/aristanetworks/goarista/test.init.func2
+// generatedFuncA would be github.com/teachain/goarista/test.init.func1
+// generatedFuncB would be github.com/teachain/goarista/test.init.func2
 var generatedFuncA = generateFunc()
 var generatedFuncB = generateFunc()
 

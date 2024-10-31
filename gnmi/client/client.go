@@ -16,8 +16,8 @@ import (
 	"sync/atomic"
 	"time"
 
-	aflag "github.com/aristanetworks/goarista/flag"
-	"github.com/aristanetworks/goarista/gnmi"
+	aflag "github.com/teachain/goarista/flag"
+	"github.com/teachain/goarista/gnmi"
 
 	"github.com/aristanetworks/glog"
 	pb "github.com/openconfig/gnmi/proto/gnmi"

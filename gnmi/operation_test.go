@@ -11,7 +11,7 @@ import (
 	"os"
 	"testing"
 
-	"github.com/aristanetworks/goarista/test"
+	"github.com/teachain/goarista/test"
 	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/types/known/anypb"
 

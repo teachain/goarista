@@ -10,7 +10,7 @@ import (
 	"testing"
 	"unsafe"
 
-	"github.com/aristanetworks/goarista/test"
+	"github.com/teachain/goarista/test"
 )
 
 type yolo struct {

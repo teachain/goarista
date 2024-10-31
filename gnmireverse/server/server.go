@@ -20,8 +20,8 @@ import (
 	"time"
 
 	"github.com/aristanetworks/glog"
-	gnmilib "github.com/aristanetworks/goarista/gnmi"
-	"github.com/aristanetworks/goarista/gnmireverse"
+	gnmilib "github.com/teachain/goarista/gnmi"
+	"github.com/teachain/goarista/gnmireverse"
 	"github.com/openconfig/gnmi/proto/gnmi"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials"

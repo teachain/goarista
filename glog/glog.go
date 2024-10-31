@@ -55,7 +55,7 @@ func (g *Glog) Fatalf(format string, args ...interface{}) {
 //
 // Example usage:
 //
-//	import aglog "github.com/aristanetworks/goarista/glog"
+//	import aglog "github.com/teachain/goarista/glog"
 //	func TestExampleFunction(t *testing.T) {
 //		reset := aglog.SuppressLines(
 //			`Warning: non-ASCII value in test A`,

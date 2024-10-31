@@ -4,8 +4,8 @@
 
 FROM golang:1.13.6
 
-RUN mkdir -p /go/src/github.com/aristanetworks/goarista/cmd
-WORKDIR /go/src/github.com/aristanetworks/goarista
+RUN mkdir -p /go/src/github.com/teachain/goarista/cmd
+WORKDIR /go/src/github.com/teachain/goarista
 COPY ./ .
 RUN go get -d ./cmd/ocprometheus/... \
   && go install ./cmd/ocprometheus

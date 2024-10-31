@@ -5,7 +5,7 @@
 package elasticsearch
 
 import (
-	"github.com/aristanetworks/goarista/gnmi"
+	"github.com/teachain/goarista/gnmi"
 	pb "github.com/openconfig/gnmi/proto/gnmi"
 )
 

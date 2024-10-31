@@ -4,7 +4,7 @@
 
 package main
 
-import "github.com/aristanetworks/goarista/gnmireverse/server"
+import "github.com/teachain/goarista/gnmireverse/server"
 
 func main() {
 	server.Main()

@@ -8,7 +8,7 @@ import (
 	"fmt"
 	"testing"
 
-	"github.com/aristanetworks/goarista/test"
+	"github.com/teachain/goarista/test"
 
 	"github.com/openconfig/gnmi/proto/gnmi_ext"
 )

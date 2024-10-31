@@ -13,8 +13,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/aristanetworks/goarista/lanz"
-	pb "github.com/aristanetworks/goarista/lanz/proto"
+	"github.com/teachain/goarista/lanz"
+	pb "github.com/teachain/goarista/lanz/proto"
 
 	"google.golang.org/protobuf/proto"
 )

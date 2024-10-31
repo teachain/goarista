@@ -12,7 +12,7 @@ import (
 	"strings"
 
 	"github.com/aristanetworks/glog"
-	gnmiUtils "github.com/aristanetworks/goarista/gnmi"
+	gnmiUtils "github.com/teachain/goarista/gnmi"
 	"github.com/prometheus/client_golang/prometheus"
 	"gopkg.in/yaml.v2"
 )

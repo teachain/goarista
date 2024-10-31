@@ -13,10 +13,10 @@ import (
 	"strings"
 	"sync"
 
-	client "github.com/aristanetworks/goarista/gnmi"
-	"github.com/aristanetworks/goarista/kafka"
-	"github.com/aristanetworks/goarista/kafka/gnmi"
-	"github.com/aristanetworks/goarista/kafka/producer"
+	client "github.com/teachain/goarista/gnmi"
+	"github.com/teachain/goarista/kafka"
+	"github.com/teachain/goarista/kafka/gnmi"
+	"github.com/teachain/goarista/kafka/producer"
 
 	pb "github.com/openconfig/gnmi/proto/gnmi"
 

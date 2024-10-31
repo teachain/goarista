@@ -4,7 +4,7 @@
 
 package main
 
-import "github.com/aristanetworks/goarista/gnmi/client"
+import "github.com/teachain/goarista/gnmi/client"
 
 func main() {
 	client.Main()

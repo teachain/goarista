@@ -12,7 +12,7 @@ import (
 	"net"
 	"syscall"
 
-	"github.com/aristanetworks/goarista/logger"
+	"github.com/teachain/goarista/logger"
 )
 
 // ListenTCPWithTOS is similar to net.ListenTCP but with the socket configured

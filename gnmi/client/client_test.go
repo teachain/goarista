@@ -11,8 +11,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/aristanetworks/goarista/gnmi"
-	"github.com/aristanetworks/goarista/test"
+	"github.com/teachain/goarista/gnmi"
+	"github.com/teachain/goarista/test"
 	pb "github.com/openconfig/gnmi/proto/gnmi"
 	"google.golang.org/grpc"
 	"google.golang.org/protobuf/proto"

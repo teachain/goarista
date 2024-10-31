@@ -16,7 +16,7 @@ import "google/protobuf/empty.proto";
 // to send streaming data.
 package gnmireverse;
 
-option go_package = "github.com/aristanetworks/goarista/gnmireverse";
+option go_package = "github.com/teachain/goarista/gnmireverse";
 
 service gNMIReverse {
     // Publish allows the client to publish gNMI SubscribeResponses to the

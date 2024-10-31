@@ -3,7 +3,7 @@ def pipelinevars
 pipeline {
     environment {
         GOCACHE = "/tmp/.gocache"
-        GOARISTA = "${WORKSPACE}/src/github.com/aristanetworks/goarista"
+        GOARISTA = "${WORKSPACE}/src/github.com/teachain/goarista"
         // golangci has its own cache.
         GOLANGCI_LINT_CACHE = "/tmp/.golangci_cache"
         // PATH does not get set inside stages that use docker agents, see

@@ -9,7 +9,7 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/aristanetworks/goarista/key"
+	"github.com/teachain/goarista/key"
 	"github.com/aristanetworks/gomap"
 )
 

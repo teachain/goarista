@@ -14,7 +14,7 @@ Compiling the client requires Go 1.16 or later. Instructions for installing Go c
 found [here](https://go.dev/doc/install). Once Go is installed you can run:
 
 ```
-GOOS=linux go install github.com/aristanetworks/goarista/cmd/gnmireverse_client@latest
+GOOS=linux go install github.com/teachain/goarista/cmd/gnmireverse_client@latest
 ```
 
 This will install the `gnmireverse_client` binary in the `$HOME/go/bin` or
@@ -115,7 +115,7 @@ It may be preferable to instead retrieve individual leaf updates under a path. T
 A collector implementing a gNMIReverse server can be installed with:
 
 ```
-go install github.com/aristanetworks/goarista/cmd/gnmireverse_server@latest
+go install github.com/teachain/goarista/cmd/gnmireverse_server@latest
 ```
 Run the program with the flag `--help` or `-h` to see the full list of options.
 

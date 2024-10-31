@@ -11,8 +11,8 @@ import (
 	"runtime"
 	"time"
 
-	"github.com/aristanetworks/goarista/areflect"
-	"github.com/aristanetworks/goarista/key"
+	"github.com/teachain/goarista/areflect"
+	"github.com/teachain/goarista/key"
 
 	"google.golang.org/protobuf/proto"
 )
