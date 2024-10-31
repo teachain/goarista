@@ -7,8 +7,8 @@ package gnmi
 import (
 	"testing"
 
-	"github.com/aristanetworks/goarista/elasticsearch"
-	"github.com/aristanetworks/goarista/test"
+	"github.com/teachain/goarista/elasticsearch"
+	"github.com/teachain/goarista/test"
 
 	"github.com/openconfig/gnmi/proto/gnmi"
 )

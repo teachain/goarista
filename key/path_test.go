@@ -10,8 +10,8 @@ import (
 	"testing"
 	"unicode/utf8"
 
-	"github.com/aristanetworks/goarista/key"
-	"github.com/aristanetworks/goarista/path"
+	"github.com/teachain/goarista/key"
+	"github.com/teachain/goarista/path"
 )
 
 func TestPath(t *testing.T) {

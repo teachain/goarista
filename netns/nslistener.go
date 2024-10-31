@@ -16,7 +16,7 @@ import (
 
 	"github.com/aristanetworks/fsnotify"
 	"github.com/aristanetworks/glog"
-	"github.com/aristanetworks/goarista/dscp"
+	"github.com/teachain/goarista/dscp"
 )
 
 var makeListener = func(nsName string, addr *net.TCPAddr, tos byte) (net.Listener, error) {

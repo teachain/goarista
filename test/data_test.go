@@ -9,7 +9,7 @@ import (
 	"fmt"
 	"testing"
 
-	"github.com/aristanetworks/goarista/key"
+	"github.com/teachain/goarista/key"
 )
 
 type builtinCompare struct {

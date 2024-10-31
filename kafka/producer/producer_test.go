@@ -10,8 +10,8 @@ import (
 	"sync"
 	"testing"
 
-	"github.com/aristanetworks/goarista/kafka/gnmi"
-	"github.com/aristanetworks/goarista/test"
+	"github.com/teachain/goarista/kafka/gnmi"
+	"github.com/teachain/goarista/test"
 
 	"github.com/Shopify/sarama"
 	"github.com/golang/protobuf/proto"

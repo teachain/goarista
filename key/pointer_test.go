@@ -9,8 +9,8 @@ import (
 	"fmt"
 	"testing"
 
-	"github.com/aristanetworks/goarista/key"
-	"github.com/aristanetworks/goarista/path"
+	"github.com/teachain/goarista/key"
+	"github.com/teachain/goarista/path"
 )
 
 func TestPointer(t *testing.T) {

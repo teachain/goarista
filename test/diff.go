@@ -11,8 +11,8 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/aristanetworks/goarista/areflect"
-	"github.com/aristanetworks/goarista/key"
+	"github.com/teachain/goarista/areflect"
+	"github.com/teachain/goarista/key"
 )
 
 // diffable types have a method that returns the diff

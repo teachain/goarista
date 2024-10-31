@@ -8,7 +8,7 @@ package monotime_test
 import (
 	"testing"
 
-	. "github.com/aristanetworks/goarista/monotime"
+	. "github.com/teachain/goarista/monotime"
 )
 
 func TestNow(t *testing.T) {

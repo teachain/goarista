@@ -11,7 +11,7 @@ import (
 	"sync"
 
 	"github.com/aristanetworks/glog"
-	"github.com/aristanetworks/goarista/gnmi"
+	"github.com/teachain/goarista/gnmi"
 	"github.com/golang/protobuf/proto"
 	"github.com/golang/protobuf/ptypes/any"
 	pb "github.com/openconfig/gnmi/proto/gnmi"

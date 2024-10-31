@@ -14,11 +14,11 @@ import (
 	"strings"
 	"time"
 
-	"github.com/aristanetworks/goarista/gnmi"
+	"github.com/teachain/goarista/gnmi"
 
 	"github.com/aristanetworks/glog"
-	hec "github.com/aristanetworks/splunk-hec-go"
 	pb "github.com/openconfig/gnmi/proto/gnmi"
+	hec "github.com/teachain/splunk-hec-go"
 	"golang.org/x/sync/errgroup"
 )
 

@@ -9,7 +9,7 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/aristanetworks/goarista/key"
+	"github.com/teachain/goarista/key"
 )
 
 // Map associates paths to values. It allows wildcards. A Map

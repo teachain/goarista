@@ -9,7 +9,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/aristanetworks/goarista/test"
+	"github.com/teachain/goarista/test"
 	client "github.com/influxdata/influxdb1-client/v2"
 )
 

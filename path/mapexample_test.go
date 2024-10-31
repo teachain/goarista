@@ -8,7 +8,7 @@ import (
 	"fmt"
 	"sort"
 
-	"github.com/aristanetworks/goarista/path"
+	"github.com/teachain/goarista/path"
 )
 
 func ExampleMap_Visit() {

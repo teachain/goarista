@@ -8,7 +8,7 @@
 After installing [Go](https://golang.org/dl/) run:
 
 ```
-go get github.com/aristanetworks/goarista/cmd/gnmi
+go get github.com/teachain/goarista/cmd/gnmi
 ```
 
 This will install the `gnmi` binary in the `bin` directory

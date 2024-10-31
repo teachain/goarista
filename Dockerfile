@@ -5,8 +5,8 @@
 # TODO: move this to cmd/ockafka (https://github.com/docker/hub-feedback/issues/292)
 FROM golang:1.10.3
 
-RUN mkdir -p /go/src/github.com/aristanetworks/goarista/cmd
-WORKDIR /go/src/github.com/aristanetworks/goarista
+RUN mkdir -p /go/src/github.com/teachain/goarista/cmd
+WORKDIR /go/src/github.com/teachain/goarista
 COPY ./ .
 RUN go get -d ./cmd/ockafka/... \
   && go install ./cmd/ockafka

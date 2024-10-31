@@ -18,7 +18,7 @@ import (
 	"io/ioutil"
 	"strings"
 
-	"github.com/aristanetworks/goarista/netns"
+	"github.com/teachain/goarista/netns"
 	"github.com/golang/protobuf/proto"
 	pb "github.com/openconfig/gnmi/proto/gnmi"
 	"google.golang.org/grpc"

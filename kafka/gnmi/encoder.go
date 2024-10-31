@@ -9,8 +9,8 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/aristanetworks/goarista/elasticsearch"
-	"github.com/aristanetworks/goarista/kafka"
+	"github.com/teachain/goarista/elasticsearch"
+	"github.com/teachain/goarista/kafka"
 
 	"github.com/Shopify/sarama"
 	"github.com/aristanetworks/glog"

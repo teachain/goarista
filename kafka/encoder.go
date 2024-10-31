@@ -10,7 +10,7 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/aristanetworks/goarista/monitor"
+	"github.com/teachain/goarista/monitor"
 
 	"github.com/Shopify/sarama"
 	"github.com/aristanetworks/glog"
