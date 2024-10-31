@@ -1,18 +1,18 @@
 module github.com/aristanetworks/goarista
 
-go 1.21
+go 1.23.2
 
 require (
 	github.com/IBM/sarama v1.43.3
 	github.com/aristanetworks/fsnotify v1.4.6
 	github.com/aristanetworks/glog v0.0.0-20240405175045-cc0ea3461e10
 	github.com/aristanetworks/gomap v0.0.0-20240724180630-b4cffb90720f
-	github.com/aristanetworks/splunk-hec-go v0.3.3
 	github.com/cenkalti/backoff/v4 v4.3.0
 	github.com/influxdata/influxdb1-client v0.0.0-20220302092344-a9ab5670611c
 	github.com/kylelemons/godebug v1.1.0
 	github.com/openconfig/gnmi v0.11.0
 	github.com/prometheus/client_golang v1.20.2
+	github.com/teachain/splunk-hec-go v0.0.0-20241031063232-c812cf611eb3
 	github.com/xtaci/kcp-go v5.4.20+incompatible
 	golang.org/x/net v0.28.0
 	golang.org/x/sync v0.8.0
@@ -34,6 +34,7 @@ require (
 	github.com/eapache/queue v1.1.0 // indirect
 	github.com/garyburd/redigo v1.6.0 // indirect
 	github.com/golang/snappy v0.0.4 // indirect
+	github.com/google/uuid v1.6.0 // indirect
 	github.com/hashicorp/errwrap v1.1.0 // indirect
 	github.com/hashicorp/go-multierror v1.1.1 // indirect
 	github.com/hashicorp/go-uuid v1.0.3 // indirect
@@ -55,7 +56,6 @@ require (
 	github.com/prometheus/common v0.57.0 // indirect
 	github.com/prometheus/procfs v0.15.1 // indirect
 	github.com/rcrowley/go-metrics v0.0.0-20201227073835-cf1acfcdf475 // indirect
-	github.com/satori/go.uuid v1.2.0 // indirect
 	github.com/templexxx/cpufeat v0.0.0-20180724012125-cef66df7f161 // indirect
 	github.com/templexxx/xor v0.0.0-20191217153810-f85b25db303b // indirect
 	github.com/tjfoc/gmsm v1.4.1 // indirect
