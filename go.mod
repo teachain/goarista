@@ -12,7 +12,7 @@ require (
 	github.com/kylelemons/godebug v1.1.0
 	github.com/openconfig/gnmi v0.11.0
 	github.com/prometheus/client_golang v1.20.2
-	github.com/teachain/splunk-hec-go v0.0.0-20241031063232-c812cf611eb3
+	github.com/teachain/splunk-hec-go v0.1.0
 	github.com/xtaci/kcp-go v5.4.20+incompatible
 	golang.org/x/net v0.28.0
 	golang.org/x/sync v0.8.0
