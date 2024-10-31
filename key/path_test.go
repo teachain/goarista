@@ -10,8 +10,8 @@ import (
 	"testing"
 	"unicode/utf8"
 
-	"github.com/teachain/goarista/key"
-	"github.com/teachain/goarista/path"
+	"github.com/aristanetworks/goarista/key"
+	"github.com/aristanetworks/goarista/path"
 )
 
 func TestPath(t *testing.T) {
@@ -120,12 +120,15 @@ func TestPathEqual(t *testing.T) {
 
 func TestPathAsKey(t *testing.T) {
 	a := newPathKey("foo", path.Wildcard, map[string]interface{}{
-		"bar": key.NewMap(
+		"bar": map[key.Key]interface{}{
 			// Should be able to embed a path key and value
-			newPathKey("path", "to", "something"), path.New("else")),
+			newPathKey("path", "to", "something"): path.New("else"),
+		},
 	})
-	m := key.NewMap(a, "thats a complex key!")
-	if s, ok := m.Get(a); !ok {
+	m := map[key.Key]string{
+		a: "thats a complex key!",
+	}
+	if s, ok := m[a]; !ok {
 		t.Error("complex key not found in map")
 	} else if s != "thats a complex key!" {
 		t.Errorf("incorrect value in map: %s", s)
@@ -147,16 +150,5 @@ func TestInvalidUTF8(t *testing.T) {
 	pathString := p.String()
 	if !utf8.ValidString(pathString) {
 		t.Errorf("expected %q to be valid utf8", pathString)
-	}
-}
-
-var pathStr string
-
-func BenchmarkPathString(b *testing.B) {
-	p := path.New("foo", "bar", "baz", "qux", "corge", "grault", "garply", "waldo", "fred")
-	b.ReportAllocs()
-	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
-		pathStr = p.String()
 	}
 }

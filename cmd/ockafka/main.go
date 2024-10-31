@@ -13,14 +13,14 @@ import (
 	"strings"
 	"sync"
 
-	client "github.com/teachain/goarista/gnmi"
-	"github.com/teachain/goarista/kafka"
-	"github.com/teachain/goarista/kafka/gnmi"
-	"github.com/teachain/goarista/kafka/producer"
+	client "github.com/aristanetworks/goarista/gnmi"
+	"github.com/aristanetworks/goarista/kafka"
+	"github.com/aristanetworks/goarista/kafka/gnmi"
+	"github.com/aristanetworks/goarista/kafka/producer"
 
 	pb "github.com/openconfig/gnmi/proto/gnmi"
 
-	"github.com/IBM/sarama"
+	"github.com/Shopify/sarama"
 	"github.com/aristanetworks/glog"
 )
 
@@ -59,6 +59,10 @@ func main() {
 	}
 	addresses := strings.Split(*kafka.Addresses, ",")
 	wg := new(sync.WaitGroup)
+	respChan := make(chan *pb.SubscribeResponse)
+	defer close(respChan)
+	errChan := make(chan error)
+	defer close(errChan)
 	for i, grpcAddr := range grpcAddrs {
 		key := keys[i]
 		p, err := newProducer(addresses, *kafka.Topic, key, grpcAddr)
@@ -68,31 +72,27 @@ func main() {
 			glog.Infof("Initialized Kafka producer for %s", grpcAddr)
 		}
 		wg.Add(1)
-		go func() {
-			p.Start()
-			defer p.Stop()
-			respChan := make(chan *pb.SubscribeResponse)
-			errChan := make(chan error)
-			c, err := client.Dial(config)
-			if err != nil {
+		p.Start()
+		defer p.Stop()
+		c, err := client.Dial(config)
+		if err != nil {
+			glog.Fatal(err)
+		}
+		subscribeOptions := &client.SubscribeOptions{
+			Paths: client.SplitPaths(subscriptions),
+		}
+		go client.Subscribe(ctx, c, subscribeOptions, respChan, errChan)
+		for {
+			select {
+			case resp, open := <-respChan:
+				if !open {
+					return
+				}
+				p.Write(resp)
+			case err := <-errChan:
 				glog.Fatal(err)
 			}
-			subscribeOptions := &client.SubscribeOptions{
-				Paths: client.SplitPaths(subscriptions),
-			}
-			go client.Subscribe(ctx, c, subscribeOptions, respChan, errChan)
-			for {
-				select {
-				case resp, open := <-respChan:
-					if !open {
-						return
-					}
-					p.Write(resp)
-				case err := <-errChan:
-					glog.Fatal(err)
-				}
-			}
-		}()
+		}
 	}
 	wg.Wait()
 }

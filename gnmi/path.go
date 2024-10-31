@@ -82,79 +82,29 @@ func StrPath(path *pb.Path) string {
 	return "/"
 }
 
-// writeKey is used as a helper to contain the logic of writing keys as a string.
-func writeKey(b *strings.Builder, key map[string]string) {
-	// Sort the keys so that they print in a consistent
-	// order. We don't have the YANG AST information, so the
-	// best we can do is sort them alphabetically.
-	size := 0
-	keys := make([]string, 0, len(key))
-	for k, v := range key {
-		keys = append(keys, k)
-		size += len(k) + len(v) + 3 // [, =, ]
-	}
-	sort.Strings(keys)
-	b.Grow(size)
-	for _, k := range keys {
-		b.WriteByte('[')
-		b.WriteString(escapeKey(k))
-		b.WriteByte('=')
-		b.WriteString(escapeValue(key[k]))
-		b.WriteByte(']')
-	}
-}
-
-// KeyToString is used to get the string representation of the keys.
-func KeyToString(key map[string]string) string {
-	if len(key) == 1 {
-		for k, v := range key {
-			return "[" + escapeKey(k) + "=" + escapeValue(v) + "]"
-		}
-	}
-	var b strings.Builder
-	writeKey(&b, key)
-	return b.String()
-}
-
-func writeElem(b *strings.Builder, elm *pb.PathElem) {
-	b.WriteString(escapeName(elm.Name))
-	if len(elm.Key) > 0 {
-		writeKey(b, elm.Key)
-	}
-}
-
-func escapeKey(s string) string {
-	s = strings.ReplaceAll(s, `\`, `\\`)
-	s = strings.ReplaceAll(s, `=`, `\=`)
-	return s
-}
-
-func escapeValue(s string) string {
-	s = strings.ReplaceAll(s, `\`, `\\`)
-	s = strings.ReplaceAll(s, `]`, `\]`)
-	return s
-}
-
-func escapeName(s string) string {
-	s = strings.ReplaceAll(s, `\`, `\\`)
-	s = strings.ReplaceAll(s, `/`, `\/`)
-	s = strings.ReplaceAll(s, `[`, `\[`)
-	return s
-}
-
-// ElemToString is used to get the string representation of the Element.
-func ElemToString(elm *pb.PathElem) string {
-	b := &strings.Builder{}
-	writeElem(b, elm)
-	return b.String()
-}
-
 // strPathV04 handles the v0.4 gnmi and later path.Elem member.
 func strPathV04(path *pb.Path) string {
 	b := &strings.Builder{}
 	for _, elm := range path.Elem {
 		b.WriteRune('/')
-		writeElem(b, elm)
+		writeSafeString(b, elm.Name, '/')
+		if len(elm.Key) > 0 {
+			// Sort the keys so that they print in a conistent
+			// order. We don't have the YANG AST information, so the
+			// best we can do is sort them alphabetically.
+			keys := make([]string, 0, len(elm.Key))
+			for k := range elm.Key {
+				keys = append(keys, k)
+			}
+			sort.Strings(keys)
+			for _, k := range keys {
+				b.WriteRune('[')
+				b.WriteString(k)
+				b.WriteRune('=')
+				writeSafeString(b, elm.Key[k], ']')
+				b.WriteRune(']')
+			}
+		}
 	}
 	return b.String()
 }
@@ -166,7 +116,7 @@ func strPathV03(path *pb.Path) string {
 
 // upgradePath modernizes a Path by translating the contents of the Element field to Elem
 func upgradePath(path *pb.Path) *pb.Path {
-	if path != nil && len(path.Elem) == 0 {
+	if len(path.Elem) == 0 {
 		var elems []*pb.PathElem
 		for _, element := range path.Element {
 			n, keys, _ := parseElement(element)
@@ -178,16 +128,23 @@ func upgradePath(path *pb.Path) *pb.Path {
 	return path
 }
 
-// JoinPaths joins multiple gnmi paths into a single path
+// JoinPaths joins multiple gnmi paths and returns a string representation
 func JoinPaths(paths ...*pb.Path) *pb.Path {
 	var elems []*pb.PathElem
 	for _, path := range paths {
-		if path != nil {
-			path = upgradePath(path)
-			elems = append(elems, path.Elem...)
-		}
+		path = upgradePath(path)
+		elems = append(elems, path.Elem...)
 	}
 	return &pb.Path{Elem: elems}
+}
+
+func writeSafeString(b *strings.Builder, s string, esc rune) {
+	for _, c := range s {
+		if c == esc || c == '\\' {
+			b.WriteRune('\\')
+		}
+		b.WriteRune(c)
+	}
 }
 
 // ParseGNMIElements builds up a gnmi path, from user-supplied text
@@ -223,28 +180,18 @@ func parseElement(pathElement string) (string, map[string]string, error) {
 		return "", nil, fmt.Errorf("failed to find element name in %q", pathElement)
 	}
 
-	keys, err := ParseKeys(pathElement[keyStart:])
-	if err != nil {
-		return "", nil, err
-	}
-	return name, keys, nil
-
-}
-
-// ParseKeys parses just the keys portion of the stringified elem and returns the map of stringified
-// keys.
-func ParseKeys(keyPart string) (map[string]string, error) {
 	// Look at the keys now.
 	keys := make(map[string]string)
+	keyPart := pathElement[keyStart:]
 	for keyPart != "" {
 		k, v, nextKey, err := parseKey(keyPart)
 		if err != nil {
-			return nil, err
+			return "", nil, err
 		}
 		keys[k] = v
 		keyPart = nextKey
 	}
-	return keys, nil
+	return name, keys, nil
 }
 
 // parseKey returns the key name, key value and the remaining string to be parsed,
@@ -256,11 +203,17 @@ func parseKey(s string) (string, string, string, error) {
 	if iEq < 0 {
 		return "", "", "", fmt.Errorf("failed to find '=' in %q", s)
 	}
+	if k == "" {
+		return "", "", "", fmt.Errorf("failed to find key name in %q", s)
+	}
 
 	rhs := s[1+iEq+1:]
 	v, iClosBr := findUnescaped(rhs, ']')
 	if iClosBr < 0 {
 		return "", "", "", fmt.Errorf("failed to find ']' in %q", s)
+	}
+	if v == "" {
+		return "", "", "", fmt.Errorf("failed to find key value in %q", s)
 	}
 
 	next := rhs[iClosBr+1:]

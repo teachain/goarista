@@ -8,12 +8,12 @@ import (
 	"os"
 	"sync"
 
-	"github.com/teachain/goarista/kafka"
-	"github.com/teachain/goarista/kafka/gnmi"
+	"github.com/aristanetworks/goarista/kafka"
+	"github.com/aristanetworks/goarista/kafka/gnmi"
 
-	"github.com/IBM/sarama"
+	"github.com/Shopify/sarama"
 	"github.com/aristanetworks/glog"
-	"google.golang.org/protobuf/proto"
+	"github.com/golang/protobuf/proto"
 )
 
 // Producer forwards messages recvd on a channel to kafka.

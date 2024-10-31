@@ -7,13 +7,9 @@ package test
 import (
 	"errors"
 	"fmt"
-	"reflect"
-	"runtime"
 	"testing"
-	"time"
 
-	"github.com/teachain/goarista/key"
-	pb "google.golang.org/protobuf/types/known/durationpb"
+	"github.com/aristanetworks/goarista/key"
 )
 
 type builtinCompare struct {
@@ -62,31 +58,10 @@ func (e myStringError) Error() string {
 	return string(e)
 }
 
-type hasFunc struct {
-	f func()
-}
-
-func someFunction()      {}
-func someOtherFunction() {}
-
-func generateFunc() func() {
-	return func() {}
-}
-
-// both of these functions are generated, but will both will be assigned distinct anonymous names,
-// for example:
-// generatedFuncA would be github.com/teachain/goarista/test.init.func1
-// generatedFuncB would be github.com/teachain/goarista/test.init.func2
-var generatedFuncA = generateFunc()
-var generatedFuncB = generateFunc()
-
 func getDeepEqualTests(t *testing.T) []deepEqualTestCase {
 	var deepEqualNullMapString map[string]interface{}
 	recursive := &complexCompare{}
 	recursive.p = recursive
-	time1 := time.Now()
-	time2 := time1.Add(time.Second)
-	time1a := time.Unix(0, time1.UnixNano())
 	return []deepEqualTestCase{{
 		a: nil,
 		b: nil,
@@ -464,26 +439,27 @@ func getDeepEqualTests(t *testing.T) []deepEqualTestCase {
 		a: key.New("a"),
 		b: key.New("a"),
 	}, {
-		a: key.NewMap(key.New("a"), "b"),
-		b: key.NewMap(key.New("a"), "b"),
+		a: map[key.Key]string{key.New("a"): "b"},
+		b: map[key.Key]string{key.New("a"): "b"},
 	}, {
-		a: key.NewMap(key.New(map[string]interface{}{"a": true}), "b"),
-		b: key.NewMap(key.New(map[string]interface{}{"a": true}), "b"),
-	}, {
-		a: key.New(map[string]interface{}{
-			"a": key.NewMap(key.New(map[string]interface{}{"k": 42}), true)}),
-		b: key.New(map[string]interface{}{
-			"a": key.NewMap(key.New(map[string]interface{}{"k": 42}), true)}),
+		a: map[key.Key]string{key.New(map[string]interface{}{"a": true}): "b"},
+		b: map[key.Key]string{key.New(map[string]interface{}{"a": true}): "b"},
 	}, {
 		a: key.New(map[string]interface{}{
-			"a": key.NewMap(key.New(map[string]interface{}{"k": 42}), true)}),
+			"a": map[key.Key]interface{}{key.New(map[string]interface{}{"k": 42}): true}}),
 		b: key.New(map[string]interface{}{
-			"a": key.NewMap(key.New(map[string]interface{}{"k": 51}), true)}),
+			"a": map[key.Key]interface{}{key.New(map[string]interface{}{"k": 42}): true}}),
+	}, {
+		a: key.New(map[string]interface{}{
+			"a": map[key.Key]interface{}{key.New(map[string]interface{}{"k": 42}): true}}),
+		b: key.New(map[string]interface{}{
+			"a": map[key.Key]interface{}{key.New(map[string]interface{}{"k": 51}): true}}),
 		diff: `Comparable types are different: ` +
-			`key.mapKey{"a":*key.Map{normal:map[interface {}]interface {}{}, ` +
-			`custom:map[uint64]key.entry{<max_depth>:<max_depth>}, length:int(1)}} vs ` +
-			`key.mapKey{"a":*key.Map{normal:map[interface {}]interface {}{}, ` +
-			`custom:map[uint64]key.entry{<max_depth>:<max_depth>}, length:int(1)}}`,
+			`key.compositeKey{sentinel:uintptr(18379810577513696751), m:map[string]interface {}` +
+			`{"a":map[key.Key]interface {}{<max_depth>:<max_depth>}}, s:[]interface {}{}}` +
+			` vs key.compositeKey{sentinel:uintptr(18379810577513696751), ` +
+			`m:map[string]interface {}{"a":map[key.Key]interface {}` +
+			`{<max_depth>:<max_depth>}}, s:[]interface {}{}}`,
 	}, {
 		a: fmt.Errorf("This is a %d error", 42),
 		b: errors.New("This is a 42 error"),
@@ -521,64 +497,7 @@ func getDeepEqualTests(t *testing.T) []deepEqualTestCase {
 		b:    []byte("bar"),
 		diff: `[]byte("foo") != []byte("bar")`,
 	}, {
-		a: time1,
-		b: time1a,
-	}, {
-		a: time1,
-		b: time1.UTC(),
-	}, {
-		a:    time1,
-		b:    time2,
-		diff: fmt.Sprintf("time.Time values are different: %s vs %s", time1, time2),
-	}, {
 		a: embedder{builtinCompare: builtinCompare{}},
 		b: embedder{builtinCompare: builtinCompare{}},
-	}, {
-		a: pb.Duration{Seconds: 1},
-		b: pb.Duration{Seconds: 1},
-	}, {
-		a:    pb.Duration{Seconds: 1},
-		b:    pb.Duration{Seconds: 2},
-		diff: "attributes \"Seconds\" are different: int64(1) != int64(2)",
-	}, {
-		a:    []interface{}{"foo", uint32(42)},
-		b:    pb.Duration{Seconds: 1},
-		diff: "expected a []interface {} but got a durationpb.Duration",
-	}, {
-		a:    pb.Duration{Seconds: 1},
-		b:    []interface{}{"foo", uint32(42)},
-		diff: "expected a durationpb.Duration but got a []interface {}",
-	}, {
-		a: &hasFunc{},
-		b: &hasFunc{},
-	}, {
-		a: &hasFunc{f: someFunction},
-		b: &hasFunc{f: someFunction},
-	}, {
-		a: &hasFunc{},
-		b: &hasFunc{f: someFunction},
-		diff: fmt.Sprintf("attributes \"f\" are different: type func():"+
-			" (func())(nil) with name \"\" cannot be compared to %#v with name %q,"+
-			" functions must be exactly equal or nil",
-			reflect.ValueOf(someFunction),
-			runtime.FuncForPC(reflect.ValueOf(someFunction).Pointer()).Name()),
-	}, {
-		a: &hasFunc{f: someFunction},
-		b: &hasFunc{f: someOtherFunction},
-		diff: fmt.Sprintf("attributes \"f\" are different: type func(): %#v with name %q"+
-			" cannot be compared to %#v with name %q, functions must be exactly equal or nil",
-			reflect.ValueOf(someFunction),
-			runtime.FuncForPC(reflect.ValueOf(someFunction).Pointer()).Name(),
-			reflect.ValueOf(someOtherFunction),
-			runtime.FuncForPC(reflect.ValueOf(someOtherFunction).Pointer()).Name()),
-	}, {
-		a: &hasFunc{f: generatedFuncA},
-		b: &hasFunc{f: generatedFuncB},
-		diff: fmt.Sprintf("attributes \"f\" are different: type func(): %#v with name %q"+
-			" cannot be compared to %#v with name %q, functions must be exactly equal or nil",
-			reflect.ValueOf(generatedFuncA),
-			runtime.FuncForPC(reflect.ValueOf(generatedFuncA).Pointer()).Name(),
-			reflect.ValueOf(generatedFuncB),
-			runtime.FuncForPC(reflect.ValueOf(generatedFuncB).Pointer()).Name()),
 	}}
 }

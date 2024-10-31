@@ -8,13 +8,11 @@ import (
 	"bytes"
 	"fmt"
 	"reflect"
-	"runtime"
 	"sort"
 	"strings"
-	"time"
 
-	"github.com/teachain/goarista/areflect"
-	"github.com/teachain/goarista/key"
+	"github.com/aristanetworks/goarista/areflect"
+	"github.com/aristanetworks/goarista/key"
 )
 
 // diffable types have a method that returns the diff
@@ -74,28 +72,12 @@ func diffImpl(a, b interface{}, seen map[edge]struct{}) string {
 		return ac.Diff(b.(diffable))
 	}
 
-	if ad, ok := a.(DeepEqualer); ok {
-		if ad.DeepEqual(b.(DeepEqualer), func(x, y interface{}) bool {
-			return deepEqual(x, y, seen)
-		}) {
-			return ""
-		}
-		return fmt.Sprintf("DeepEqualer types are different: %v vs %v", a, b)
-	}
-
 	if ac, ok := a.(key.Comparable); ok {
 		if ac.Equal(b.(key.Comparable)) {
 			return ""
 		}
 		return fmt.Sprintf("Comparable types are different: %s vs %s",
 			PrettyPrint(a), PrettyPrint(b))
-	}
-
-	if at, ok := a.(time.Time); ok {
-		if at.Equal(b.(time.Time)) {
-			return ""
-		}
-		return fmt.Sprintf("time.Time values are different: %s vs %s", at, b.(time.Time))
 	}
 
 	switch av.Kind() {
@@ -210,13 +192,9 @@ func diffImpl(a, b interface{}, seen map[edge]struct{}) string {
 		if ac, bc := av.Complex(), bv.Complex(); ac != bc {
 			return fmt.Sprintf("%s(%f) != %s(%f)", av.Type().Name(), ac, bv.Type().Name(), bc)
 		}
-	case reflect.Func:
-		return fmt.Sprintf("type %T: %#[1]v with name %q cannot"+
-			" be compared to %#[3]v with name %q, functions must be exactly equal or nil",
-			a, runtime.FuncForPC(av.Pointer()).Name(), b, runtime.FuncForPC(bv.Pointer()).Name())
-	default:
-		return fmt.Sprintf("Unknown or unsupported type: %T: %#[1]v", a)
 
+	default:
+		return fmt.Sprintf("Unknown or unsupported type: %T: %#v", a, a)
 	}
 
 	return ""

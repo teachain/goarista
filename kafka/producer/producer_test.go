@@ -10,12 +10,12 @@ import (
 	"sync"
 	"testing"
 
-	"github.com/teachain/goarista/kafka/gnmi"
-	"github.com/teachain/goarista/test"
+	"github.com/aristanetworks/goarista/kafka/gnmi"
+	"github.com/aristanetworks/goarista/test"
 
-	"github.com/IBM/sarama"
+	"github.com/Shopify/sarama"
+	"github.com/golang/protobuf/proto"
 	pb "github.com/openconfig/gnmi/proto/gnmi"
-	"google.golang.org/protobuf/proto"
 )
 
 type mockAsyncProducer struct {
@@ -51,36 +51,6 @@ func (p *mockAsyncProducer) Successes() <-chan *sarama.ProducerMessage {
 
 func (p *mockAsyncProducer) Errors() <-chan *sarama.ProducerError {
 	return p.errors
-}
-
-func (p *mockAsyncProducer) IsTransactional() bool {
-	panic("Not implemented")
-}
-
-func (p *mockAsyncProducer) TxnStatus() sarama.ProducerTxnStatusFlag {
-	panic("Not implemented")
-}
-
-func (p *mockAsyncProducer) BeginTxn() error {
-	panic("Not implemented")
-}
-
-func (p *mockAsyncProducer) CommitTxn() error {
-	panic("Not implemented")
-}
-
-func (p *mockAsyncProducer) AbortTxn() error {
-	panic("Not implemented")
-}
-
-func (p *mockAsyncProducer) AddOffsetsToTxn(
-	offsets map[string][]*sarama.PartitionOffsetMetadata, groupID string) error {
-	panic("Not implemented")
-}
-
-func (p *mockAsyncProducer) AddMessageToTxn(
-	msg *sarama.ConsumerMessage, groupID string, metadata *string) error {
-	panic("Not implemented")
 }
 
 func newPath(path string) *pb.Path {

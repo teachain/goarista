@@ -53,7 +53,7 @@ docker:
 	docker build -f cmd/occlient/Dockerfile .
 
 clean:
-	rm -rf $(GOPATH_PKG)/*/github.com/teachain/goarista
+	rm -rf $(GOPATH_PKG)/*/github.com/aristanetworks/goarista
 	$(GO) clean ./...
 
 .PHONY: all check coverage coverdata docker fmtcheck install lint test vet

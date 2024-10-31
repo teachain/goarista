@@ -8,8 +8,8 @@ import (
 	"encoding/json"
 	"testing"
 
-	"github.com/teachain/goarista/key"
-	"github.com/teachain/goarista/value"
+	"github.com/aristanetworks/goarista/key"
+	"github.com/aristanetworks/goarista/value"
 )
 
 type pseudoWildcard struct{}

@@ -8,34 +8,84 @@ import (
 	"encoding/base64"
 	"fmt"
 	"math"
+	"sort"
 	"strconv"
 	"strings"
 	"unicode/utf8"
+
+	"github.com/aristanetworks/goarista/value"
 )
 
-type keyStringer interface {
-	KeyString() string
-}
-
-// StringKey generates a String suitable to be used as a key in a
-// string index by calling k.StringKey, if available, otherwise it
-// calls k.String. StringKey returns the same results as
-// StringifyInterface(k.Key()) and should be preferred over
-// StringifyInterface.
-func StringKey(k Key) string {
-	if ks, ok := k.(keyStringer); ok {
-		return ks.KeyString()
-	}
-	return k.String()
-}
-
-// StringifyInterface transforms an arbitrary interface into a string
-// representation suitable to be used as a key, such as in a JSON
-// object, or as a path element.
-//
-// Deprecated: Use StringKey instead.
+// StringifyInterface transforms an arbitrary interface into its string
+// representation.  We need to do this because some entities use the string
+// representation of their keys as their names.
+// Note: this API is deprecated and will be removed.
 func StringifyInterface(key interface{}) (string, error) {
-	return stringify(key), nil
+	var str string
+	switch key := key.(type) {
+	case nil:
+		return "<nil>", nil
+	case bool:
+		str = strconv.FormatBool(key)
+	case uint8:
+		str = strconv.FormatUint(uint64(key), 10)
+	case uint16:
+		str = strconv.FormatUint(uint64(key), 10)
+	case uint32:
+		str = strconv.FormatUint(uint64(key), 10)
+	case uint64:
+		str = strconv.FormatUint(key, 10)
+	case int8:
+		str = strconv.FormatInt(int64(key), 10)
+	case int16:
+		str = strconv.FormatInt(int64(key), 10)
+	case int32:
+		str = strconv.FormatInt(int64(key), 10)
+	case int64:
+		str = strconv.FormatInt(key, 10)
+	case float32:
+		str = "f" + strconv.FormatInt(int64(math.Float32bits(key)), 10)
+	case float64:
+		str = "f" + strconv.FormatInt(int64(math.Float64bits(key)), 10)
+	case string:
+		str = escape(key)
+	case map[string]interface{}:
+		keys := SortedKeys(key)
+		for i, k := range keys {
+			v := key[k]
+			keys[i] = stringify(v)
+		}
+		str = strings.Join(keys, "_")
+	case *map[string]interface{}:
+		return StringifyInterface(*key)
+	case map[Key]interface{}:
+		m := make(map[string]interface{}, len(key))
+		for k, v := range key {
+			m[k.String()] = v
+		}
+		keys := SortedKeys(m)
+		for i, k := range keys {
+			keys[i] = stringify(k) + "=" + stringify(m[k])
+		}
+		str = strings.Join(keys, "_")
+	case []interface{}:
+		elements := make([]string, len(key))
+		for i, element := range key {
+			elements[i] = stringify(element)
+		}
+		str = strings.Join(elements, ",")
+	case Pointer:
+		return "{" + key.Pointer().String() + "}", nil
+	case Path:
+		return "[" + key.String() + "]", nil
+	case value.Value:
+		return key.String(), nil
+
+	default:
+		panic(fmt.Errorf("Unable to stringify type %T: %#v", key, key))
+	}
+
+	return str, nil
 }
 
 // escape checks if the string is a valid utf-8 string.
@@ -49,65 +99,49 @@ func escape(str string) string {
 }
 
 func stringify(key interface{}) string {
-	switch key := key.(type) {
-	case nil:
-		return "<nil>"
-	case bool:
-		return strconv.FormatBool(key)
-	case uint8:
-		return strconv.FormatUint(uint64(key), 10)
-	case uint16:
-		return strconv.FormatUint(uint64(key), 10)
-	case uint32:
-		return strconv.FormatUint(uint64(key), 10)
-	case uint64:
-		return strconv.FormatUint(key, 10)
-	case int8:
-		return strconv.FormatInt(int64(key), 10)
-	case int16:
-		return strconv.FormatInt(int64(key), 10)
-	case int32:
-		return strconv.FormatInt(int64(key), 10)
-	case int64:
-		return strconv.FormatInt(key, 10)
-	case float32:
-		return "f" + strconv.FormatInt(int64(math.Float32bits(key)), 10)
-	case float64:
-		return "f" + strconv.FormatInt(int64(math.Float64bits(key)), 10)
-	case string:
-		return escape(key)
-	case map[string]interface{}:
-		keys := SortedKeys(key)
-		for i, k := range keys {
-			v := key[k]
-			keys[i] = stringify(v)
-		}
-		return strings.Join(keys, "_")
-	case *map[string]interface{}:
-		return stringify(*key)
-	case Map:
-		return key.KeyString()
-	case *Map:
-		return key.KeyString()
-	case []interface{}:
-		elements := make([]string, len(key))
-		for i, element := range key {
-			elements[i] = stringify(element)
-		}
-		return strings.Join(elements, ",")
-	case []byte:
-		return base64.StdEncoding.EncodeToString(key)
-	case Pointer:
-		return "{" + key.Pointer().String() + "}"
-	case Path:
-		return "[" + key.String() + "]"
-	case keyStringer:
-		return key.KeyString()
-	case fmt.Stringer:
-		return key.String()
-	default:
-		panic(fmt.Errorf("Unable to stringify type %T: %#v", key, key))
+	s, err := StringifyInterface(key)
+	if err != nil {
+		panic(err)
 	}
+	return s
+}
+
+// StringifyCollection safely returns a string representation of a
+// map[Key]interface{} that is similar in form to the standard
+// stringification of a map, "map[k1:v1, k2:v2]". This differs from
+// StringifyInterface's handling of a map which emits a string to be
+// used as key in contexts such as JSON objects.
+func StringifyCollection(m map[Key]interface{}) string {
+	type kv struct {
+		key string
+		val string
+	}
+	var length int
+	kvs := make([]kv, 0, len(m))
+	for k, v := range m {
+		element := kv{
+			key: stringifyCollectionHelper(k.Key()),
+			val: stringifyCollectionHelper(v),
+		}
+		kvs = append(kvs, element)
+		length += len(element.key) + len(element.val)
+	}
+	sort.Slice(kvs, func(i, j int) bool {
+		return kvs[i].key < kvs[j].key
+	})
+	var buf strings.Builder
+	buf.Grow(length + len("map[]") + 2*len(kvs) /* room for seperators: ", :" */)
+	buf.WriteString("map[")
+	for i, kv := range kvs {
+		if i > 0 {
+			buf.WriteString(" ")
+		}
+		buf.WriteString(kv.key)
+		buf.WriteByte(':')
+		buf.WriteString(kv.val)
+	}
+	buf.WriteByte(']')
+	return buf.String()
 }
 
 // stringifyCollectionHelper is similar to StringifyInterface, but
@@ -125,6 +159,8 @@ func stringifyCollectionHelper(val interface{}) string {
 			keys[i] = k + ":" + s
 		}
 		return "map[" + strings.Join(keys, " ") + "]"
+	case map[Key]interface{}:
+		return StringifyCollection(val)
 	case []interface{}:
 		elements := make([]string, len(val))
 		for i, element := range val {
@@ -135,10 +171,6 @@ func stringifyCollectionHelper(val interface{}) string {
 		return "{" + val.Pointer().String() + "}"
 	case Path:
 		return "[" + val.String() + "]"
-	case NonUnwrappingKey:
-		return val.String()
-	case Key:
-		return stringifyCollectionHelper(val.Key())
 	}
 
 	return fmt.Sprint(val)

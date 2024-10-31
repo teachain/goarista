@@ -9,8 +9,8 @@ import (
 	"fmt"
 	"testing"
 
-	"github.com/teachain/goarista/key"
-	"github.com/teachain/goarista/path"
+	"github.com/aristanetworks/goarista/key"
+	"github.com/aristanetworks/goarista/path"
 )
 
 func TestPointer(t *testing.T) {
@@ -114,14 +114,17 @@ func TestPointerEqual(t *testing.T) {
 
 func TestPointerAsKey(t *testing.T) {
 	a := key.NewPointer(path.New("foo", path.Wildcard, map[string]interface{}{
-		"bar": key.NewMap(
+		"bar": map[key.Key]interface{}{
 			// Should be able to embed pointer key.
-			key.New(key.NewPointer(path.New("baz"))),
+			key.New(key.NewPointer(path.New("baz"))):
 			// Should be able to embed pointer value.
-			key.NewPointer(path.New("baz"))),
+			key.NewPointer(path.New("baz")),
+		},
 	}))
-	m := key.NewMap(key.New(a), "a")
-	if s, ok := m.Get(key.New(a)); !ok {
+	m := map[key.Key]string{
+		key.New(a): "a",
+	}
+	if s, ok := m[key.New(a)]; !ok {
 		t.Error("pointer to path not keyed in map")
 	} else if s != "a" {
 		t.Errorf("pointer to path not mapped to correct value in map: %s", s)

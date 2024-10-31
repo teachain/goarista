@@ -8,7 +8,7 @@ import (
 	"fmt"
 	"testing"
 
-	"github.com/teachain/goarista/test"
+	"github.com/aristanetworks/goarista/test"
 
 	pb "github.com/openconfig/gnmi/proto/gnmi"
 )
@@ -72,10 +72,6 @@ func TestStrPath(t *testing.T) {
 		path: "/foo[a=1\\]2][b=2]/bar",
 	}, {
 		path: "/foo[a=1][b=2]/bar\\/baz",
-	}, {
-		path: `/foo[a\==1]`,
-	}, {
-		path: `/f\/o\[o[a\==1]`,
 	}} {
 		sElms := SplitPath(tc.path)
 		pbPath, err := ParseGNMIElements(sElms)
@@ -83,7 +79,7 @@ func TestStrPath(t *testing.T) {
 			t.Errorf("failed to parse %s: %s", sElms, err)
 		}
 		s := StrPath(pbPath)
-		if tc.path != s {
+		if !test.DeepEqual(tc.path, s) {
 			t.Errorf("[%d] want %s, got %s", i, tc.path, s)
 		}
 	}
@@ -144,15 +140,13 @@ func TestParseElement(t *testing.T) {
 		in:            "hello[there]",
 		expectedError: fmt.Errorf("failed to find '=' in %q", "[there]"),
 	}, {
-		name:      "no_left_side",
-		in:        "hello[=there]",
-		fieldName: "hello",
-		keys:      map[string]string{"": "there"},
+		name:          "no_left_side",
+		in:            "hello[=there]",
+		expectedError: fmt.Errorf("failed to find key name in %q", "[=there]"),
 	}, {
-		name:      "no_right_side",
-		in:        "hello[there=]",
-		fieldName: "hello",
-		keys:      map[string]string{"there": ""},
+		name:          "no_right_side",
+		in:            "hello[there=]",
+		expectedError: fmt.Errorf("failed to find key value in %q", "[there=]"),
 	}, {
 		name:          "hanging_escape",
 		in:            "hello[there\\",
@@ -190,15 +184,13 @@ func TestParseElement(t *testing.T) {
 		in:            "hello[there=where][somename]",
 		expectedError: fmt.Errorf("failed to find '=' in %q", "[somename]"),
 	}, {
-		name:      "no_left_side",
-		in:        "hello[there=where][=somevalue]",
-		fieldName: "hello",
-		keys:      map[string]string{"there": "where", "": "somevalue"},
+		name:          "no_left_side",
+		in:            "hello[there=where][=somevalue]",
+		expectedError: fmt.Errorf("failed to find key name in %q", "[=somevalue]"),
 	}, {
-		name:      "no_right_side",
-		in:        "hello[there=where][somename=]",
-		fieldName: "hello",
-		keys:      map[string]string{"there": "where", "somename": ""},
+		name:          "no_right_side",
+		in:            "hello[there=where][somename=]",
+		expectedError: fmt.Errorf("failed to find key value in %q", "[somename=]"),
 	}, {
 		name:      "two_name_values",
 		in:        "hello[there=where][somename=somevalue]",
@@ -216,16 +208,6 @@ func TestParseElement(t *testing.T) {
 		fieldName: "hello",
 		keys: map[string]string{"there": "*", "somename": "somevalue",
 			"anothername": "value"},
-	}, {
-		name:      "escaped =",
-		in:        `hello[foo\==bar]`,
-		fieldName: "hello",
-		keys:      map[string]string{"foo=": "bar"},
-	}, {
-		name:      "escaped [",
-		in:        `hell\[o[foo=bar]`,
-		fieldName: "hell[o",
-		keys:      map[string]string{"foo": "bar"},
 	}}
 
 	for _, tc := range cases {
@@ -239,112 +221,6 @@ func TestParseElement(t *testing.T) {
 			}
 			if tc.fieldName != fieldName {
 				t.Fatalf("[%s] expected field name %s, got %s", tc.name, tc.fieldName, fieldName)
-			}
-		})
-	}
-}
-
-func TestParseKeys(t *testing.T) {
-	// test cases
-	cases := []struct {
-		// name is the name of the test useful if you want to run a single test
-		// from the command line -run TestParseElement/<name>
-		name string
-		// in is the path element to be parsed
-		in string
-		// keys is a map of the expected key value pairs from within the []s in the
-		// `path element.
-		//
-		// For example prefix[ip-prefix=10.0.0.0/24][masklength-range=26..28]
-		// fieldName would be "prefix"
-		// keys would be {"ip-prefix": "10.0.0.0/24", "masklength-range": "26..28"}
-		keys map[string]string
-		// expectedError is the exact error we expect.
-		expectedError error
-	}{{
-		name:          "no_equal_no_close",
-		in:            "[there",
-		expectedError: fmt.Errorf("failed to find '=' in %q", "[there"),
-	}, {
-		name:          "no_equals",
-		in:            "[there]",
-		expectedError: fmt.Errorf("failed to find '=' in %q", "[there]"),
-	}, {
-		name: "no_left_side",
-		in:   "[=there]",
-		keys: map[string]string{"": "there"},
-	}, {
-		name: "no_right_side",
-		in:   "[there=]",
-		keys: map[string]string{"there": ""},
-	}, {
-		name:          "hanging_escape",
-		in:            "[there\\",
-		expectedError: fmt.Errorf("failed to find '=' in %q", "[there\\"),
-	}, {
-		name: "single_name_value",
-		in:   "[there=where]",
-		keys: map[string]string{"there": "where"},
-	}, {
-		name: "single_value_with=",
-		in:   "[there=whe=r=e]",
-		keys: map[string]string{"there": "whe=r=e"},
-	}, {
-		name: "single_value_with=_and_escaped_]",
-		in:   `[there=whe=\]r=e]`,
-		keys: map[string]string{"there": `whe=]r=e`},
-	}, {
-		name: "single_value_with[",
-		in:   "[there=w[[here]",
-		keys: map[string]string{"there": "w[[here"},
-	}, {
-		name:          "value_single_open",
-		in:            "[first=value][",
-		expectedError: fmt.Errorf("failed to find '=' in %q", "["),
-	}, {
-		name:          "value_no_close",
-		in:            "[there=where][somename",
-		expectedError: fmt.Errorf("failed to find '=' in %q", "[somename"),
-	}, {
-		name:          "value_no_equals",
-		in:            "[there=where][somename]",
-		expectedError: fmt.Errorf("failed to find '=' in %q", "[somename]"),
-	}, {
-		name: "no_left_side",
-		in:   "[there=where][=somevalue]",
-		keys: map[string]string{"there": "where", "": "somevalue"},
-	}, {
-		name: "no_right_side",
-		in:   "[there=where][somename=]",
-		keys: map[string]string{"there": "where", "somename": ""},
-	}, {
-		name: "two_name_values",
-		in:   "[there=where][somename=somevalue]",
-		keys: map[string]string{"there": "where", "somename": "somevalue"},
-	}, {
-		name: "three_name_values",
-		in:   "[there=where][somename=somevalue][anothername=value]",
-		keys: map[string]string{"there": "where", "somename": "somevalue",
-			"anothername": "value"},
-	}, {
-		name: "aserisk_value",
-		in:   "[there=*][somename=somevalue][anothername=value]",
-		keys: map[string]string{"there": "*", "somename": "somevalue",
-			"anothername": "value"},
-	}, {
-		name: "escaped =",
-		in:   `[foo\==bar]`,
-		keys: map[string]string{"foo=": "bar"},
-	}}
-
-	for _, tc := range cases {
-		t.Run(tc.name, func(t *testing.T) {
-			keys, err := ParseKeys(tc.in)
-			if !test.DeepEqual(tc.expectedError, err) {
-				t.Fatalf("[%s] expected err %#v, got %#v", tc.name, tc.expectedError, err)
-			}
-			if !test.DeepEqual(tc.keys, keys) {
-				t.Fatalf("[%s] expected output %#v, got %#v", tc.name, tc.keys, keys)
 			}
 		})
 	}
@@ -389,20 +265,10 @@ func TestJoinPath(t *testing.T) {
 		},
 		{
 			paths: []*pb.Path{
-				{Element: []string{"foo", "bar[somekey=someval][otherkey=otherval]"}},
-				{Element: []string{"baz", "qux[somekey=someval][otherkey=otherval]"}}},
+				&pb.Path{Element: []string{"foo", "bar[somekey=someval][otherkey=otherval]"}},
+				&pb.Path{Element: []string{"baz", "qux[somekey=someval][otherkey=otherval]"}}},
 			exp: "/foo/bar[somekey=someval][otherkey=otherval]/" +
 				"baz/qux[somekey=someval][otherkey=otherval]",
-		},
-		{
-			paths: []*pb.Path{
-				nil,
-				{Element: []string{"baz", "qux[somekey=someval][otherkey=otherval]"}},
-				nil,
-				{Element: []string{"foo", "bar[somekey=someval][otherkey=otherval]"}},
-				nil},
-			exp: "baz/qux[otherkey=otherval][somekey=someval]/" +
-				"foo/bar[somekey=someval][otherkey=otherval]",
 		},
 	}
 
@@ -438,37 +304,5 @@ func BenchmarkPathElementMaxKeys(b *testing.B) {
 	for i := 0; i < b.N; i++ {
 		_, _, _ = parseElement("hello[name=firstName][name=secondName][name=thirdName]" +
 			"[name=fourthName][name=fifthName][name=sixthName]")
-	}
-}
-
-func BenchmarkKeyToString(b *testing.B) {
-	for _, bench := range []struct {
-		name string
-		key  map[string]string
-	}{{
-		name: "singlekey",
-		key:  map[string]string{"abcdefghijkm": "nopqrstuvwxyz"},
-	}, {
-		name: "fivekeys",
-		key: map[string]string{
-			"one":   "one",
-			"two":   "two",
-			"three": "three",
-			"four":  "four",
-			"five":  "five",
-		},
-	}, {
-		name: "escaped",
-		key: map[string]string{
-			"foo=": "bar",
-			"foo":  "ba]r]",
-		},
-	}} {
-		b.Run(bench.name, func(b *testing.B) {
-			b.ReportAllocs()
-			for i := 0; i < b.N; i++ {
-				KeyToString(bench.key)
-			}
-		})
 	}
 }

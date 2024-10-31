@@ -1,4 +1,4 @@
-# Arista Go library [![Build Status](https://travis-ci.org/aristanetworks/goarista.svg?branch=master)](https://travis-ci.org/aristanetworks/goarista) [![codecov.io](http://codecov.io/github/aristanetworks/goarista/coverage.svg?branch=master)](http://codecov.io/github/aristanetworks/goarista?branch=master) [![GoDoc](https://godoc.org/github.com/teachain/goarista?status.png)](https://godoc.org/github.com/teachain/goarista) [![Go Report Card](https://goreportcard.com/badge/github.com/teachain/goarista)](https://goreportcard.com/report/github.com/teachain/goarista)
+# Arista Go library [![Build Status](https://travis-ci.org/aristanetworks/goarista.svg?branch=master)](https://travis-ci.org/aristanetworks/goarista) [![codecov.io](http://codecov.io/github/aristanetworks/goarista/coverage.svg?branch=master)](http://codecov.io/github/aristanetworks/goarista?branch=master) [![GoDoc](https://godoc.org/github.com/aristanetworks/goarista?status.png)](https://godoc.org/github.com/aristanetworks/goarista) [![Go Report Card](https://goreportcard.com/badge/github.com/aristanetworks/goarista)](https://goreportcard.com/report/github.com/aristanetworks/goarista)
 
 ## areflect
 
@@ -25,13 +25,14 @@ class of service flags to use for incoming connections. Requires `go1.9`.
 
 ## key
 
-Provides common types used across various Arista projects. The type `key.Key` is used to work 
-around the fact that Go can't let one use a non-hashable type as a key to a `map`. Because we 
-often use a `map[string]interface{}` (or other non-hashable type) as a key to a map, the type
-`key.Map` is used to represent a map that can store both natively hashable and non-hashable types
-alike. To do this, a non-hashable type must have a custom Hash() method defined. The type
-`key.Path` is the representation of a path broken down into individual elements, where each
-element is a `key.Key`. The type `key.Pointer` represents a pointer to a `key.Path`.
+Provides common types used across various Arista projects. The type `key.Key`
+is used to work around the fact that Go can't let one use a non-hashable type
+as a key to a `map`, and we sometimes need to use a `map[string]interface{}`
+(or something containing one) as a key to maps. As a result, we frequently use
+`map[key.Key]interface{}` instead of just `map[interface{}]interface{}` when we
+need a generic key-value collection. The type `key.Path` is the representation
+of a path broken down into individual elements, where each element is a `key.Key`.
+The type `key.Pointer` represents a pointer to a `key.Path`.
 
 ## path
 

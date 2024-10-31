@@ -11,8 +11,7 @@ deviceLabels:
                 lab1: val3
                 lab2: val4
 
-# Subscriptions to paths.
-# The paths can be optionally prefixed with origin followed by colon (eg. eos_native:/Sysdb/interface/config)
+# Subscriptions to OpenConfig paths.
 subscriptions:
         - /Sysdb/environment/cooling/status
         - /Sysdb/environment/power/status

@@ -9,7 +9,7 @@ import (
 	"encoding/json"
 	"testing"
 
-	"github.com/teachain/goarista/monitor/stats"
+	"github.com/aristanetworks/goarista/monitor/stats"
 )
 
 var expected0 = []byte(`{

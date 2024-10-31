@@ -11,7 +11,7 @@ import (
 	"sort"
 	"strconv"
 
-	"github.com/teachain/goarista/areflect"
+	"github.com/aristanetworks/goarista/areflect"
 )
 
 // PrettyPrint tries to display a human readable version of an interface

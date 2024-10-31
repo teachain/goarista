@@ -2,7 +2,7 @@
 // Use of this source code is governed by the Apache License 2.0
 // that can be found in the COPYING file.
 
-package gnmi
+package openconfig
 
 import (
 	"encoding/json"
@@ -11,11 +11,12 @@ import (
 
 	"github.com/aristanetworks/goarista/elasticsearch"
 	"github.com/aristanetworks/goarista/kafka"
+	"github.com/aristanetworks/goarista/openconfig"
 
 	"github.com/Shopify/sarama"
 	"github.com/aristanetworks/glog"
 	"github.com/golang/protobuf/proto"
-	"github.com/openconfig/gnmi/proto/gnmi"
+	pb "github.com/openconfig/reference/rpc/openconfig"
 )
 
 // UnhandledMessageError is used for proto messages not matching the handled types
@@ -29,7 +30,7 @@ func (e UnhandledMessageError) Error() string {
 
 // UnhandledSubscribeResponseError is used for subscribe responses not matching the handled types
 type UnhandledSubscribeResponseError struct {
-	response *gnmi.SubscribeResponse
+	response *pb.SubscribeResponse
 }
 
 func (e UnhandledSubscribeResponseError) Error() string {
@@ -56,7 +57,8 @@ func NewEncoder(topic string, key sarama.Encoder, dataset string) kafka.MessageE
 
 func (e *elasticsearchMessageEncoder) Encode(message proto.Message) ([]*sarama.ProducerMessage,
 	error) {
-	response, ok := message.(*gnmi.SubscribeResponse)
+
+	response, ok := message.(*pb.SubscribeResponse)
 	if !ok {
 		return nil, UnhandledMessageError{message: message}
 	}
@@ -64,24 +66,25 @@ func (e *elasticsearchMessageEncoder) Encode(message proto.Message) ([]*sarama.P
 	if update == nil {
 		return nil, UnhandledSubscribeResponseError{response: response}
 	}
-	updateMaps, err := elasticsearch.NotificationToMaps(e.dataset, update)
+	updateMap, err := openconfig.NotificationToMap(e.dataset, update,
+		elasticsearch.EscapeFieldName)
 	if err != nil {
 		return nil, err
 	}
-	messages := make([]*sarama.ProducerMessage, len(updateMaps))
-	for i, updateMap := range updateMaps {
-		updateJSON, err := json.Marshal(updateMap)
-		if err != nil {
-			return nil, err
-		}
-		glog.V(9).Infof("kafka: %s", updateJSON)
-
-		messages[i] = &sarama.ProducerMessage{
+	// Convert time to ms to make elasticsearch happy
+	updateMap["timestamp"] = updateMap["timestamp"].(int64) / 1000000
+	updateJSON, err := json.Marshal(updateMap)
+	if err != nil {
+		return nil, err
+	}
+	glog.V(9).Infof("kafka: %s", updateJSON)
+	return []*sarama.ProducerMessage{
+		{
 			Topic:    e.topic,
 			Key:      e.key,
 			Value:    sarama.ByteEncoder(updateJSON),
 			Metadata: kafka.Metadata{StartTime: time.Unix(0, update.Timestamp), NumMessages: 1},
-		}
-	}
-	return messages, nil
+		},
+	}, nil
+
 }

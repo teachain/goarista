@@ -10,11 +10,11 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/teachain/goarista/monitor"
+	"github.com/aristanetworks/goarista/monitor"
 
-	"github.com/IBM/sarama"
+	"github.com/Shopify/sarama"
 	"github.com/aristanetworks/glog"
-	"google.golang.org/protobuf/proto"
+	"github.com/golang/protobuf/proto"
 )
 
 // MessageEncoder is an encoder interface

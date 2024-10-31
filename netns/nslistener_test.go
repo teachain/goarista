@@ -13,9 +13,6 @@ import (
 	"strings"
 	"sync"
 	"testing"
-
-	"github.com/teachain/goarista/glog"
-	"github.com/teachain/goarista/logger"
 )
 
 type mockListener struct {
@@ -52,8 +49,8 @@ var currentMockListener struct {
 	listener *mockListener
 }
 
-func makeMockListener(n int) func(string, ListenerCreator) (net.Listener, error) {
-	return func(string, ListenerCreator) (net.Listener, error) {
+func makeMockListener(n int) func(string, *net.TCPAddr, byte) (net.Listener, error) {
+	return func(_ string, _ *net.TCPAddr, _ byte) (net.Listener, error) {
 		currentMockListener.mu.Lock()
 		defer currentMockListener.mu.Unlock()
 		currentMockListener.listener = &mockListener{
@@ -68,7 +65,7 @@ func makeMockListener(n int) func(string, ListenerCreator) (net.Listener, error)
 
 func TestNSListener(t *testing.T) {
 	makeListener = makeMockListener(1)
-	hasMount = func(_ string, _ logger.Logger) bool {
+	hasMount = func(_ string) bool {
 		return true
 	}
 
@@ -77,11 +74,8 @@ func TestNSListener(t *testing.T) {
 		t.Fatalf("Can't create temp file: %v", err)
 	}
 	defer os.RemoveAll(nsDir)
-	// the listenerCreator is not needed, but there is a nil check, have it do nothing
-	l, err := newNSListenerWithDir(nsDir, "ns-yolo", nil, &glog.Glog{},
-		func() (net.Listener, error) {
-			return nil, nil
-		})
+
+	l, err := newNSListenerWithDir(nsDir, "ns-yolo", nil, 0)
 	if err != nil {
 		t.Fatalf("Can't create mock listener: %v", err)
 	}
@@ -125,7 +119,7 @@ func TestNSListener(t *testing.T) {
 
 func TestNSListenerClose(t *testing.T) {
 	makeListener = makeMockListener(0)
-	hasMount = func(_ string, _ logger.Logger) bool {
+	hasMount = func(_ string) bool {
 		return true
 	}
 
@@ -135,11 +129,7 @@ func TestNSListenerClose(t *testing.T) {
 	}
 	defer os.RemoveAll(nsDir)
 
-	// the listenerCreator is not needed, but there is a nil check, have it do nothing
-	l, err := newNSListenerWithDir(nsDir, "ns-yolo", nil, &glog.Glog{},
-		func() (net.Listener, error) {
-			return nil, nil
-		})
+	l, err := newNSListenerWithDir(nsDir, "ns-yolo", nil, 0)
 	if err != nil {
 		t.Fatalf("Can't create mock listener: %v", err)
 	}

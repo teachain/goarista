@@ -6,25 +6,17 @@ package main
 
 import (
 	"encoding/json"
-	"fmt"
 	"math"
-	"path"
-	"regexp"
 	"strings"
 	"sync"
 
-	"golang.org/x/net/context"
-
 	"github.com/aristanetworks/glog"
-	"github.com/teachain/goarista/gnmi"
-	gnmiUtils "github.com/teachain/goarista/gnmi"
+	"github.com/aristanetworks/goarista/gnmi"
+	"github.com/golang/protobuf/proto"
+	"github.com/golang/protobuf/ptypes/any"
 	pb "github.com/openconfig/gnmi/proto/gnmi"
 	"github.com/prometheus/client_golang/prometheus"
-	"google.golang.org/protobuf/proto"
-	"google.golang.org/protobuf/types/known/anypb"
 )
-
-var labelRegex = regexp.MustCompile(`[a-zA-Z0-9_-]+`)
 
 // A metric source.
 type source struct {
@@ -38,7 +30,6 @@ type labelledMetric struct {
 	metric       prometheus.Metric
 	labels       []string
 	defaultValue float64
-	floatVal     float64
 	stringMetric bool
 }
 
@@ -47,162 +38,14 @@ type collector struct {
 	m       sync.Mutex
 	metrics map[source]*labelledMetric
 
-	config            *Config
-	descRegex         *regexp.Regexp
-	descriptionLabels map[string]map[string]string
+	config *Config
 }
 
-func newCollector(config *Config, descRegex *regexp.Regexp) *collector {
+func newCollector(config *Config) *collector {
 	return &collector{
-		metrics:           make(map[source]*labelledMetric),
-		config:            config,
-		descriptionLabels: make(map[string]map[string]string),
-		descRegex:         descRegex,
+		metrics: make(map[source]*labelledMetric),
+		config:  config,
 	}
-}
-
-// adds the label data to the map from the inital sync. No need to lock the map as we are not
-// processing updates yet.
-func (c *collector) addInitialDescriptionData(p *pb.Path, val string) {
-	labels := extractLabelsFromDesc(val, c.descRegex)
-	if len(labels) == 0 {
-		return
-	}
-	c.descriptionLabels[gnmiUtils.StrPath(p)] = labels
-}
-
-// gets updates from the descriptin nodes and updates the map accordingly.
-func (c *collector) deleteDescriptionTags(p *pb.Path) {
-	c.m.Lock()
-	defer c.m.Unlock()
-	strP := gnmiUtils.StrPath(p)
-	delete(c.descriptionLabels, strP)
-	for s, m := range c.metrics {
-		if !strings.Contains(s.path, strP) {
-			continue
-		}
-
-		metric := c.config.getMetricValues(s, c.descriptionLabels)
-		lm := prometheus.MustNewConstMetric(metric.desc, prometheus.GaugeValue, m.floatVal,
-			metric.labels...)
-		c.metrics[s].metric = lm
-	}
-}
-
-func (c *collector) updateDescriptionTags(p *pb.Path, val string) {
-	c.m.Lock()
-	defer c.m.Unlock()
-
-	strP := gnmiUtils.StrPath(p)
-	labels := extractLabelsFromDesc(val, c.descRegex)
-	c.descriptionLabels[strP] = labels
-
-	for s, m := range c.metrics {
-		if !strings.Contains(s.path, strP) {
-			continue
-		}
-
-		met := c.config.getMetricValues(s, c.descriptionLabels)
-		lm := prometheus.MustNewConstMetric(met.desc, prometheus.GaugeValue, m.floatVal,
-			met.labels...)
-		c.metrics[s].metric = lm
-	}
-}
-
-func (c *collector) handleDescriptionNodes(ctx context.Context,
-	respChan chan *pb.SubscribeResponse, wg *sync.WaitGroup) {
-	var syncReceived bool
-	defer func() {
-		if !syncReceived {
-			wg.Done()
-		}
-	}()
-
-	for {
-		select {
-		case <-ctx.Done():
-			return
-		case r := <-respChan:
-			// if syncResponse has been received then start subscribing to metric paths
-			if r.GetSyncResponse() {
-				syncReceived = true
-				wg.Done()
-				continue
-			}
-
-			notif := r.GetUpdate()
-			prefix := notif.GetPrefix()
-
-			var err error
-			if !syncReceived {
-				// only updates will be present before syncResponse has been received
-				for _, update := range notif.GetUpdate() {
-					p := gnmi.JoinPaths(prefix, update.Path)
-					p, err = getNearestList(p)
-					if err != nil {
-						glog.V(9).Infof("failed to parse description tags, got %s", err)
-						continue
-					}
-					c.addInitialDescriptionData(p, update.GetVal().GetStringVal())
-				}
-				continue
-			}
-
-			// sync received, update data and regen tags if required.
-			for _, d := range notif.GetDelete() {
-				p := gnmi.JoinPaths(prefix, d)
-				p, err = getNearestList(p)
-				if err != nil {
-					glog.V(9).Infof("failed to parse description tags, got %s", err)
-					continue
-				}
-				c.deleteDescriptionTags(p)
-			}
-
-			for _, u := range notif.GetUpdate() {
-				p := gnmi.JoinPaths(prefix, u.Path)
-				p, err = getNearestList(p)
-				if err != nil {
-					glog.V(9).Infof("failed to parse description tags, got %s", err)
-					continue
-				}
-				c.updateDescriptionTags(p, u.GetVal().GetStringVal())
-			}
-		}
-	}
-}
-
-// using the default/user defined regex it extracts the labels from the description node value
-func extractLabelsFromDesc(desc string, re *regexp.Regexp) map[string]string {
-	labels := make(map[string]string)
-	matches := re.FindAllStringSubmatch(desc, -1)
-	glog.V(8).Infof("matched the following groups using the provided regex: %v", matches)
-
-	if len(matches) > 2 {
-		glog.V(8).Infof("received more than 2 match groups, got %v", matches)
-	}
-	for _, match := range matches {
-		if match[2] == "" {
-			if labelRegex.FindString(match[1]) != match[1] {
-				glog.V(9).Infof("label %s did not match allowed regex "+
-					"%s", match[1], labelRegex.String())
-				continue
-			}
-			labels[match[1]] = "1"
-			glog.V(9).Infof("found label %s=1", match[1])
-			continue
-		}
-
-		match[2] = match[2][1:] // remove the equals sign
-		if labelRegex.FindString(match[2]) != match[2] {
-			glog.V(9).Infof("label %s did not match allowed regex %s",
-				match[2], labelRegex.String())
-			continue
-		}
-		labels[match[1]] = match[2]
-		glog.V(9).Infof("found label %s%s", match[1], match[2])
-	}
-	return labels
 }
 
 // Process a notification and update or create the corresponding metrics.
@@ -222,7 +65,7 @@ func (c *collector) update(addr string, message proto.Message) {
 	prefix := gnmi.StrPath(notif.Prefix)
 	// Process deletes first
 	for _, del := range notif.Delete {
-		path := path.Join(prefix, gnmi.StrPath(del))
+		path := prefix + gnmi.StrPath(del)
 		key := source{addr: device, path: path}
 		c.m.Lock()
 		if _, ok := c.metrics[key]; ok {
@@ -241,7 +84,7 @@ func (c *collector) update(addr string, message proto.Message) {
 
 	// Process updates next
 	for _, update := range notif.Update {
-		path := path.Join(prefix, gnmi.StrPath(update.Path))
+		path := prefix + gnmi.StrPath(update.Path)
 		value, suffix, ok := parseValue(update)
 		if !ok {
 			continue
@@ -281,25 +124,23 @@ func (c *collector) update(addr string, message proto.Message) {
 
 			m.metric = prometheus.MustNewConstMetric(m.metric.Desc(), prometheus.GaugeValue,
 				floatVal, m.labels...)
-			m.floatVal = floatVal
 			c.m.Unlock()
 			continue
 		}
 
+		c.m.Unlock()
 		// Get the descriptor and labels for this source
-		metric := c.config.getMetricValues(src, c.descriptionLabels)
+		metric := c.config.getMetricValues(src)
 		if metric == nil || metric.desc == nil {
 			glog.V(8).Infof("Ignoring unmatched update %v at %s:%s with value %+v",
 				update, device, path, value)
-			c.m.Unlock()
 			continue
 		}
 
-		if metric.stringMetric {
-			if !strUpdate {
-				// A float was parsed from the update, yet metric expects a string.
-				// Store the float as a string.
-				strVal = fmt.Sprintf("%.0f", floatVal)
+		if strUpdate {
+			if !metric.stringMetric {
+				// Skip string updates for non string metrics
+				continue
 			}
 			// Display a default value and replace the value label with the string value
 			floatVal = metric.defaultValue
@@ -307,11 +148,11 @@ func (c *collector) update(addr string, message proto.Message) {
 		}
 
 		// Save the metric and labels in the cache
+		c.m.Lock()
 		lm := prometheus.MustNewConstMetric(metric.desc, prometheus.GaugeValue,
 			floatVal, metric.labels...)
 		c.metrics[src] = &labelledMetric{
 			metric:       lm,
-			floatVal:     floatVal,
 			labels:       metric.labels,
 			defaultValue: metric.defaultValue,
 			stringMetric: metric.stringMetric,
@@ -320,7 +161,15 @@ func (c *collector) update(addr string, message proto.Message) {
 	}
 }
 
-func getValue(intf interface{}) (interface{}, string, bool) {
+// parseValue takes in an update and parses a value and suffix
+// Returns an interface that contains either a string or a float64 as well as a suffix
+// Unparseable updates return (0, empty string, false)
+func parseValue(update *pb.Update) (interface{}, string, bool) {
+	intf, err := gnmi.ExtractValue(update)
+	if err != nil {
+		return 0, "", false
+	}
+
 	switch value := intf.(type) {
 	// float64 or string expected as the return value
 	case int64:
@@ -329,8 +178,6 @@ func getValue(intf interface{}) (interface{}, string, bool) {
 		return float64(value), "", true
 	case float32:
 		return float64(value), "", true
-	case float64:
-		return intf, "", true
 	case *pb.Decimal64:
 		val := gnmi.DecimalToFloat(value)
 		if math.IsInf(val, 0) || math.IsNaN(val) {
@@ -343,17 +190,20 @@ func getValue(intf interface{}) (interface{}, string, bool) {
 			return value, "", true
 		}
 		return valFloat, "", true
-	case *anypb.Any:
+	case *any.Any:
 		return value.String(), "", true
 	case []interface{}:
-		glog.V(9).Infof("skipping array value")
+		// extract string represetation for now
+		return gnmi.StrVal(update.Val), "", false
 	case map[string]interface{}:
 		if vIntf, ok := value["value"]; ok {
-			res, suffix, ok := getValue(vIntf)
-			if suffix != "" {
-				return res, fmt.Sprintf("value/%s", suffix), ok
+			if num, ok := vIntf.(json.Number); ok {
+				valFloat, err := num.Float64()
+				if err != nil {
+					return num, "value", true
+				}
+				return valFloat, "value", true
 			}
-			return res, "value", ok
 		}
 	case bool:
 		if value {
@@ -367,17 +217,6 @@ func getValue(intf interface{}) (interface{}, string, bool) {
 	}
 
 	return 0, "", false
-}
-
-// parseValue takes in an update and parses a value and suffix
-// Returns an interface that contains either a string or a float64 as well as a suffix
-// Unparseable updates return (0, empty string, false)
-func parseValue(update *pb.Update) (interface{}, string, bool) {
-	intf, err := gnmi.ExtractValue(update)
-	if err != nil {
-		return 0, "", false
-	}
-	return getValue(intf)
 }
 
 // Describe implements prometheus.Collector interface

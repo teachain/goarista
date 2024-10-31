@@ -8,13 +8,9 @@ import (
 	"bytes"
 	"math"
 	"reflect"
-	"runtime"
-	"time"
 
-	"github.com/teachain/goarista/areflect"
-	"github.com/teachain/goarista/key"
-
-	"google.golang.org/protobuf/proto"
+	"github.com/aristanetworks/goarista/areflect"
+	"github.com/aristanetworks/goarista/key"
 )
 
 var comparableType = reflect.TypeOf((*key.Comparable)(nil)).Elem()
@@ -28,12 +24,6 @@ var comparableType = reflect.TypeOf((*key.Comparable)(nil)).Elem()
 //   - Supports "composite" (or "complex") keys in maps that are pointers.
 func DeepEqual(a, b interface{}) bool {
 	return deepEqual(a, b, nil)
-}
-
-// DeepEqualer allows collection types to compare their values using a
-// given comparator.
-type DeepEqualer interface {
-	DeepEqual(other interface{}, comparer func(a, b interface{}) bool) bool
 }
 
 func deepEqual(a, b interface{}, seen map[edge]struct{}) bool {
@@ -125,24 +115,9 @@ func deepEqual(a, b interface{}, seen map[edge]struct{}) bool {
 		}
 		return false
 
-	case DeepEqualer:
-		return a.DeepEqual(b, func(x, y interface{}) bool {
-			return deepEqual(x, y, seen)
-		})
-
 	case key.Comparable:
 		return a.Equal(b)
 
-	case time.Time:
-		bt, ok := b.(time.Time)
-		return ok && a.Equal(bt)
-
-	case proto.Message:
-		bMsg, ok := b.(proto.Message)
-		if !ok || a == nil || bMsg == nil {
-			return ok && a == bMsg
-		}
-		return proto.Equal(a, bMsg)
 	case []uint32:
 		v, ok := b.([]uint32)
 		if !ok || len(a) != len(v) {
@@ -291,22 +266,7 @@ func genericDeepEqual(a, b interface{}, seen map[edge]struct{}) bool {
 			}
 		}
 		return true
-	case reflect.Func:
-		if av.IsNil() != bv.IsNil() {
-			return false
-		}
-		if av.IsNil() {
-			return true
-		}
-		// if both of these are functions, compare their full names
-		return runtime.FuncForPC(av.Pointer()).Name() ==
-			runtime.FuncForPC(bv.Pointer()).Name()
 	default:
-		// Incomparable types cannot be compared with DeepEqual.
-		// To skip comparisons, tag the type with `deepequal:"ignore"`
-		if !av.Type().Comparable() || !bv.Type().Comparable() {
-			return false
-		}
 		// Other the basic types.
 		return a == b
 	}
@@ -317,11 +277,10 @@ func genericDeepEqual(a, b interface{}, seen map[edge]struct{}) bool {
 // function is O(N^2) in the size of the input maps.
 //
 // The return is to be interpreted this way:
-//
-//	true, _, _            =>   av == bv
-//	false, key, invalid   =>   the given key wasn't found in bv
-//	false, key, value     =>   the given key had the given value in bv,
-//	                           which is different in av
+//    true, _, _            =>   av == bv
+//    false, key, invalid   =>   the given key wasn't found in bv
+//    false, key, value     =>   the given key had the given value in bv,
+//                               which is different in av
 func complexKeyMapEqual(av, bv reflect.Value,
 	seen map[edge]struct{}) (bool, reflect.Value, reflect.Value) {
 	for _, ka := range av.MapKeys() {

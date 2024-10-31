@@ -5,33 +5,9 @@
 package key
 
 import (
-	"fmt"
 	"math"
 	"testing"
 )
-
-type directKeyImplementation struct{ v bool }
-
-// Equal implements Key.
-func (d directKeyImplementation) Equal(other interface{}) bool {
-	o, ok := other.(directKeyImplementation)
-	return ok && o == d
-}
-
-// Key implements Key.
-func (d directKeyImplementation) Key() interface{} {
-	return d
-}
-
-// String implements Key.
-func (d directKeyImplementation) String() string {
-	return fmt.Sprintf("{%v}", d.v)
-}
-
-func (d directKeyImplementation) NonUnwrappingKey() {}
-
-var _ Key = directKeyImplementation{}
-var _ NonUnwrappingKey = directKeyImplementation{}
 
 func TestStringify(t *testing.T) {
 	testcases := []struct {
@@ -130,6 +106,14 @@ func TestStringify(t *testing.T) {
 		},
 		output: "foobar_43_45_barfoo",
 	}, {
+		name: "map[Key]interface{}",
+		input: map[Key]interface{}{
+			New(uint32(42)): true,
+			New("foo"):      "bar",
+			New(map[string]interface{}{"hello": "world"}): "yolo",
+		},
+		output: "42=true_foo=bar_world=yolo",
+	}, {
 		name: "nil inside map[string]interface{}",
 		input: map[string]interface{}{
 			"n": nil,
@@ -140,27 +124,17 @@ func TestStringify(t *testing.T) {
 		input: []interface{}{
 			uint32(42),
 			true,
-			"foo", NewMap(
-				New("a"), "b",
-				New("b"), "c"),
+			"foo",
+			map[Key]interface{}{
+				New("a"): "b",
+				New("b"): "c",
+			},
 		},
 		output: "42,true,foo,a=b_b=c",
 	}, {
 		name:   "pointer",
 		input:  NewPointer(Path{New("foo"), New("bar")}),
 		output: "{/foo/bar}",
-	}, {
-		name:   "[]byte",
-		input:  []byte{0x1},
-		output: "AQ==",
-	}, {
-		name:   "map with []byte",
-		input:  map[string]interface{}{"key1": []byte{0x1}, "key2": uint32(42)},
-		output: "AQ==_42",
-	}, {
-		name:   "map with direct key implementation",
-		input:  map[string]any{"key1": directKeyImplementation{true}, "key2": uint32(42)},
-		output: "{true}_42",
 	}}
 
 	for _, tcase := range testcases {
@@ -180,57 +154,6 @@ func TestStringify(t *testing.T) {
 				t.Errorf("Test %s: Result is different\nReceived: %s\nExpected: %s",
 					tcase.name, result, tcase.output)
 			}
-			keyString := StringKey(New(tcase.input))
-			if tcase.output != keyString {
-				t.Errorf("Test %s: KeyString result is different\nReceived: %s\nExpected: %s",
-					tcase.name, keyString, tcase.output)
-			}
 		}()
-	}
-}
-
-var benchcases = []Key{
-	New(nil),
-	New("foobar"),
-	New(string([]byte{0xef, 0xbf, 0xbe, 0xbe, 0xbe, 0xbe, 0xbe})),
-	New(uint64(123456)),
-	New(int8(-32)),
-	New(true),
-	New(float32(2.345)),
-	New(float64(-34.6543)),
-	New(map[string]interface{}{
-		"b": uint32(43),
-		"a": "foobar",
-		"ex": map[string]interface{}{
-			"d": "barfoo",
-			"c": uint32(45),
-		},
-	}),
-	New([]interface{}{
-		uint32(42),
-		true,
-		"foo", NewMap(
-			New("a"), "b",
-			New("b"), "c"),
-	}),
-	New(NewPointer(Path{New("foo"), New("bar")})),
-}
-
-var str string
-
-func BenchmarkStringification(b *testing.B) {
-	for _, k := range benchcases {
-		b.Run(fmt.Sprintf("SI_%T", k.Key()), func(b *testing.B) {
-			b.ReportAllocs()
-			for i := 0; i < b.N; i++ {
-				str, _ = StringifyInterface(k.Key())
-			}
-		})
-		b.Run(fmt.Sprintf("SK_%T", k.Key()), func(b *testing.B) {
-			b.ReportAllocs()
-			for i := 0; i < b.N; i++ {
-				str = StringKey(k)
-			}
-		})
 	}
 }

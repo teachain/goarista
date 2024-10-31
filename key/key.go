@@ -5,14 +5,12 @@
 package key
 
 import (
-	"bytes"
-	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"math"
 	"strconv"
 
-	"github.com/teachain/goarista/value"
+	"github.com/aristanetworks/goarista/value"
 )
 
 // Key represents the Key in the updates and deletes of the Notification
@@ -26,23 +24,25 @@ type Key interface {
 	Equal(other interface{}) bool
 }
 
-// NonUnwrappingKey is just like a key, except calling key.Kew() on it returns itself.
-// This is to prevent non-terminating recursive calls such as
-// func myRec(val any) {
+// compositeKey allows storing a map[string]interface{} or []interface{} as a key
+// in a Go map. This is useful when the key isn't a fixed data structure known
+// at compile time but rather something generic, like a bag of key-value pairs
+// or a list of elements. Go does not allow storing a map or slice inside the
+// key of a map, because maps and slices are not comparable or hashable, and
+// keys in maps and slice elements must be both.  This file is a hack specific
+// to the 'gc' implementation of Go (which is the one most people use when they
+// use Go), to bypass this check, by abusing reflection to override how Go
+// compares compositeKey for equality or how it's hashed. The values allowed in
+// this map are only the types whitelisted in New() as well as map[Key]interface{}
+// and []interface{}.
 //
-//	switch val.(type) {
-//	    case key.NonUnwrappingKey: // something directly
-//	    case key.Key: myRec(val.Key()) // never ending without the previous branch
-//
-// ...
-type NonUnwrappingKey interface {
-	Key
-	NonUnwrappingKey()
+// See also https://github.com/golang/go/issues/283
+type compositeKey struct {
+	// This value must always be set to the sentinel constant above.
+	sentinel uintptr
+	m        map[string]interface{}
+	s        []interface{}
 }
-
-type mapKey map[string]interface{}
-
-type sliceKey []interface{}
 
 type interfaceKey struct {
 	key interface{}
@@ -66,13 +66,9 @@ type float64Key float64
 
 type boolKey bool
 
-type pointerKey struct {
-	sliceKey
-}
+type pointerKey compositeKey
 
-type pathKey struct {
-	sliceKey
-}
+type pathKey compositeKey
 
 type nilKey struct{}
 
@@ -104,60 +100,47 @@ func sliceToPointer(s []interface{}) pointer {
 // This function panics if the value passed in isn't allowed in a Key or
 // doesn't implement value.Value.
 func New(intf interface{}) Key {
-	k, err := TryNew(intf)
-	if err != nil {
-		panic(err.Error())
-	}
-	return k
-}
-
-// TryNew wraps the given value in a Key.
-// Returns error if the value passed in isn't allowed in a Key or
-// doesn't implement value.Value.
-func TryNew(intf interface{}) (Key, error) {
 	switch t := intf.(type) {
 	case nil:
-		return nilKey{}, nil
+		return nilKey{}
 	case map[string]interface{}:
-		return mapKey(t), nil
+		return compositeKey{sentinel: sentinel, m: t}
 	case []interface{}:
-		return sliceKey(t), nil
+		return compositeKey{sentinel: sentinel, s: t}
 	case string:
-		return strKey(t), nil
+		return strKey(t)
 	case int8:
-		return int8Key(t), nil
+		return int8Key(t)
 	case int16:
-		return int16Key(t), nil
+		return int16Key(t)
 	case int32:
-		return int32Key(t), nil
+		return int32Key(t)
 	case int64:
-		return int64Key(t), nil
+		return int64Key(t)
 	case uint8:
-		return uint8Key(t), nil
+		return uint8Key(t)
 	case uint16:
-		return uint16Key(t), nil
+		return uint16Key(t)
 	case uint32:
-		return uint32Key(t), nil
+		return uint32Key(t)
 	case uint64:
-		return uint64Key(t), nil
+		return uint64Key(t)
 	case float32:
-		return float32Key(t), nil
+		return float32Key(t)
 	case float64:
-		return float64Key(t), nil
+		return float64Key(t)
 	case bool:
-		return boolKey(t), nil
+		return boolKey(t)
 	case value.Value:
-		return interfaceKey{key: intf}, nil
+		return interfaceKey{key: intf}
 	case Pointer:
-		return pointerKey{sliceKey(pointerToSlice(t))}, nil
+		return pointerKey{sentinel: sentinel, s: pointerToSlice(t)}
 	case []byte:
-		return bytesKey(t), nil
+		return bytesKey(t)
 	case Path:
-		return pathKey{sliceKey(pathToSlice(t))}, nil
-	case Key:
-		return t, nil
+		return pathKey{sentinel: sentinel, s: pathToSlice(t)}
 	default:
-		return nil, fmt.Errorf("Invalid type for key: %T", intf)
+		panic(fmt.Sprintf("Invalid type for key: %T", intf))
 	}
 }
 
@@ -180,13 +163,6 @@ func (k interfaceKey) MarshalJSON() ([]byte, error) {
 func (k interfaceKey) Equal(other interface{}) bool {
 	o, ok := other.(Key)
 	return ok && keyEqual(k.key, o.Key())
-}
-
-func (k interfaceKey) Hash() uint64 {
-	if h, ok := k.key.(Hashable); ok {
-		return h.Hash()
-	}
-	return uint64(_nilinterhash(k.key))
 }
 
 // Comparable types have an equality-testing method.
@@ -219,22 +195,25 @@ func sliceEqual(a, b []interface{}) bool {
 	return true
 }
 
-// Equal compares two arbitrary interfaces for equality.
-func Equal(a, b interface{}) bool {
-	return keyEqual(a, b)
-}
-
 func keyEqual(a, b interface{}) bool {
 	switch a := a.(type) {
 	case map[string]interface{}:
 		b, ok := b.(map[string]interface{})
 		return ok && mapStringEqual(a, b)
+	case map[Key]interface{}:
+		b, ok := b.(map[Key]interface{})
+		if !ok || len(a) != len(b) {
+			return false
+		}
+		for k, av := range a {
+			if bv, ok := b[k]; !ok || !keyEqual(av, bv) {
+				return false
+			}
+		}
+		return true
 	case []interface{}:
 		b, ok := b.([]interface{})
 		return ok && sliceEqual(a, b)
-	case []byte:
-		b, ok := b.([]byte)
-		return ok && bytes.Equal(a, b)
 	case Comparable:
 		return a.Equal(b)
 	case Pointer:
@@ -248,60 +227,32 @@ func keyEqual(a, b interface{}) bool {
 	return a == b
 }
 
-func (k mapKey) Key() interface{} {
-	return map[string]interface{}(k)
+// Key interface implementation for map[string]interface{} and []interface{}
+func (k compositeKey) Key() interface{} {
+	if k.m != nil {
+		return k.m
+	}
+	return k.s
 }
 
-func (k mapKey) String() string {
+func (k compositeKey) String() string {
 	return stringify(k.Key())
 }
 
-func (k mapKey) GoString() string {
+func (k compositeKey) GoString() string {
 	return fmt.Sprintf("key.New(%#v)", k.Key())
 }
 
-func (k mapKey) MarshalJSON() ([]byte, error) {
+func (k compositeKey) MarshalJSON() ([]byte, error) {
 	return json.Marshal(k.Key())
 }
 
-func (k mapKey) Equal(other interface{}) bool {
-	o, ok := other.(mapKey)
-	return ok && mapStringEqual(k, o)
-}
-
-func (k mapKey) Hash() uint64 {
-	if k == nil {
-		return 0
+func (k compositeKey) Equal(other interface{}) bool {
+	o, ok := other.(compositeKey)
+	if k.m != nil {
+		return ok && mapStringEqual(k.m, o.m)
 	}
-	return uint64(hashMapString(k))
-}
-
-func (k sliceKey) Key() interface{} {
-	return []interface{}(k)
-}
-
-func (k sliceKey) String() string {
-	return stringify(k.Key())
-}
-
-func (k sliceKey) GoString() string {
-	return fmt.Sprintf("key.New(%#v)", k.Key())
-}
-
-func (k sliceKey) MarshalJSON() ([]byte, error) {
-	return json.Marshal(k.Key())
-}
-
-func (k sliceKey) Equal(other interface{}) bool {
-	o, ok := other.(sliceKey)
-	return ok && sliceEqual(k, o)
-}
-
-func (k sliceKey) Hash() uint64 {
-	if k == nil {
-		return 0
-	}
-	return uint64(hashSlice(k))
+	return ok && sliceEqual(k.s, o.s)
 }
 
 func (k strKey) Key() interface{} {
@@ -314,10 +265,6 @@ func (k strKey) String() string {
 
 func (k strKey) GoString() string {
 	return fmt.Sprintf("key.New(%q)", string(k))
-}
-
-func (k strKey) KeyString() string {
-	return escape(string(k))
 }
 
 func (k strKey) MarshalJSON() ([]byte, error) {
@@ -335,7 +282,7 @@ func (k bytesKey) Key() interface{} {
 }
 
 func (k bytesKey) String() string {
-	return base64.StdEncoding.EncodeToString([]byte(k))
+	return fmt.Sprintf("%s", []byte(k))
 }
 
 func (k bytesKey) GoString() string {
@@ -595,58 +542,58 @@ func (k boolKey) Equal(other interface{}) bool {
 
 // Key interface implementation for Pointer
 func (k pointerKey) Key() interface{} {
-	return sliceToPointer(k.sliceKey)
+	return sliceToPointer(k.s)
 }
 
 func (k pointerKey) String() string {
-	return sliceToPointer(k.sliceKey).String()
+	return sliceToPointer(k.s).String()
 }
 
 func (k pointerKey) GoString() string {
-	return fmt.Sprintf("key.New(%#v)", []interface{}(k.sliceKey))
+	return fmt.Sprintf("key.New(%#v)", k.s)
 }
 
 func (k pointerKey) MarshalJSON() ([]byte, error) {
-	return sliceToPointer(k.sliceKey).MarshalJSON()
+	return sliceToPointer(k.s).MarshalJSON()
 }
 
 func (k pointerKey) Equal(other interface{}) bool {
 	if o, ok := other.(pointerKey); ok {
-		return sliceEqual(k.sliceKey, o.sliceKey)
+		return sliceEqual(k.s, o.s)
 	}
 	key, ok := other.(Key)
 	if !ok {
 		return false
 	}
-	return sliceToPointer(k.sliceKey).Equal(key.Key())
+	return ok && sliceToPointer(k.s).Equal(key.Key())
 }
 
 // Key interface implementation for Path
 func (k pathKey) Key() interface{} {
-	return sliceToPath(k.sliceKey)
+	return sliceToPath(k.s)
 }
 
 func (k pathKey) String() string {
-	return sliceToPath(k.sliceKey).String()
+	return sliceToPath(k.s).String()
 }
 
 func (k pathKey) GoString() string {
-	return fmt.Sprintf("key.New(%#v)", []interface{}(k.sliceKey))
+	return fmt.Sprintf("key.New(%#v)", k.s)
 }
 
 func (k pathKey) MarshalJSON() ([]byte, error) {
-	return sliceToPath(k.sliceKey).MarshalJSON()
+	return sliceToPath(k.s).MarshalJSON()
 }
 
 func (k pathKey) Equal(other interface{}) bool {
 	if o, ok := other.(pathKey); ok {
-		return sliceEqual(k.sliceKey, o.sliceKey)
+		return sliceEqual(k.s, o.s)
 	}
 	key, ok := other.(Key)
 	if !ok {
 		return false
 	}
-	return sliceToPath(k.sliceKey).Equal(key.Key())
+	return ok && sliceToPath(k.s).Equal(key.Key())
 }
 
 // Key interface implementation for nil

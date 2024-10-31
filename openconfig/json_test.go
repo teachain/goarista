@@ -8,9 +8,9 @@ import (
 	"encoding/json"
 	"testing"
 
-	"github.com/teachain/goarista/test"
+	"github.com/aristanetworks/goarista/test"
 
-	"github.com/openconfig/gnmi/proto/gnmi"
+	"github.com/openconfig/reference/rpc/openconfig"
 )
 
 func TestNotificationToMap(t *testing.T) {
@@ -24,32 +24,32 @@ func TestNotificationToMap(t *testing.T) {
 		t.Fatal(err)
 	}
 	tests := []struct {
-		notification gnmi.Notification
+		notification openconfig.Notification
 		json         map[string]interface{}
 	}{{
-		notification: gnmi.Notification{
-			Prefix: &gnmi.Path{
+		notification: openconfig.Notification{
+			Prefix: &openconfig.Path{
 				Element: []string{
 					"foo",
 				},
 			},
-			Update: []*gnmi.Update{
+			Update: []*openconfig.Update{
 				{
-					Path: &gnmi.Path{
+					Path: &openconfig.Path{
 						Element: []string{
 							"route1",
 						},
 					},
-					Value: &gnmi.Value{
+					Value: &openconfig.Value{
 						Value: valueJSON,
 					},
 				}, {
-					Path: &gnmi.Path{
+					Path: &openconfig.Path{
 						Element: []string{
 							"route2",
 						},
 					},
-					Value: &gnmi.Value{
+					Value: &openconfig.Value{
 						Value: valueJSON,
 					},
 				}},
@@ -73,13 +73,13 @@ func TestNotificationToMap(t *testing.T) {
 			},
 		},
 	}, {
-		notification: gnmi.Notification{
-			Prefix: &gnmi.Path{
+		notification: openconfig.Notification{
+			Prefix: &openconfig.Path{
 				Element: []string{
 					"foo", "bar",
 				},
 			},
-			Delete: []*gnmi.Path{
+			Delete: []*openconfig.Path{
 				{
 					Element: []string{
 						"route", "237.255.255.250_0.0.0.0",
@@ -90,13 +90,13 @@ func TestNotificationToMap(t *testing.T) {
 					},
 				},
 			},
-			Update: []*gnmi.Update{{
-				Path: &gnmi.Path{
+			Update: []*openconfig.Update{{
+				Path: &openconfig.Path{
 					Element: []string{
 						"route",
 					},
 				},
-				Value: &gnmi.Value{
+				Value: &openconfig.Value{
 					Value: valueJSON,
 				},
 			}},
@@ -127,8 +127,7 @@ func TestNotificationToMap(t *testing.T) {
 			},
 		},
 	}}
-	for i := 0; i < len(tests); i++ {
-		tcase := &tests[i] // index slice to avoid copying struct with mutex in it
+	for _, tcase := range tests {
 		actual, err := NotificationToMap("cairo", &tcase.notification, nil)
 		if err != nil {
 			t.Fatal(err)

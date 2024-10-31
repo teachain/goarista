@@ -8,8 +8,8 @@ import (
 	"fmt"
 	"testing"
 
-	"github.com/teachain/goarista/key"
-	"github.com/teachain/goarista/value"
+	"github.com/aristanetworks/goarista/key"
+	"github.com/aristanetworks/goarista/value"
 )
 
 func TestNew(t *testing.T) {
@@ -40,24 +40,6 @@ func TestNew(t *testing.T) {
 		}, {
 			in:  []interface{}{customKey{i: &a}, map[string]interface{}{}},
 			out: key.Path{key.New(customKey{i: &a}), key.New(map[string]interface{}{})},
-		}, {
-			in:  []interface{}{[]string{"A", "B"}, []string{"C"}, "D"},
-			out: key.Path{key.New("A"), key.New("B"), key.New("C"), key.New("D")},
-		}, {
-			in: []interface{}{[]string{"A", "B"}, []interface{}{"1", "2"}, "D"},
-			out: key.Path{key.New("A"), key.New("B"), key.New([]interface{}{"1", "2"}),
-				key.New("D")},
-		}, {
-			in: []interface{}{[]string{"A", "B"},
-				[]key.Key{key.New("C"), key.New("D")},
-				key.Path{key.New("E"), key.New("F")},
-				[]key.Path{
-					key.Path{key.New("G"), key.New("H")},
-					key.Path{key.New("I"), key.New("J")},
-				}},
-			out: key.Path{key.New("A"), key.New("B"), key.New("C"), key.New("D"),
-				key.New("E"), key.New("F"), key.New("G"), key.New("H"),
-				key.New("I"), key.New("J")},
 		},
 	}
 	for i, tcase := range tcases {
@@ -699,16 +681,5 @@ func BenchmarkHasElement(b *testing.B) {
 				HasElement(benchmark, element)
 			}
 		})
-	}
-}
-
-func TestAppendShouldCopy(t *testing.T) {
-	p := New("a", "b")
-	p = Append(p, "c")
-	d := Append(p, "d")
-	e := Append(p, "e")
-
-	if Equal(d, e) {
-		t.Errorf("paths d and e should not be equal: %s", e)
 	}
 }

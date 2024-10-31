@@ -22,14 +22,15 @@ import (
 	"time"
 
 	pb "github.com/openconfig/gnmi/proto/gnmi"
-	"github.com/openconfig/gnmi/proto/gnmi_ext"
 	"google.golang.org/grpc/codes"
 )
 
-// GetWithRequest takes a fully formed GetRequest, performs the Get,
-// and displays any response.
-func GetWithRequest(ctx context.Context, client pb.GNMIClient,
-	req *pb.GetRequest) error {
+// Get sents a GetRequest to the given client.
+func Get(ctx context.Context, client pb.GNMIClient, paths [][]string, origin string) error {
+	req, err := NewGetRequest(paths, origin)
+	if err != nil {
+		return err
+	}
 	resp, err := client.Get(ctx, req)
 	if err != nil {
 		return err
@@ -42,16 +43,6 @@ func GetWithRequest(ctx context.Context, client pb.GNMIClient,
 		}
 	}
 	return nil
-}
-
-// Get sends a GetRequest to the given client.
-func Get(ctx context.Context, client pb.GNMIClient, paths [][]string,
-	origin string) error {
-	req, err := NewGetRequest(paths, origin)
-	if err != nil {
-		return err
-	}
-	return GetWithRequest(ctx, client, req)
 }
 
 // Capabilities retuns the capabilities of the client.
@@ -72,13 +63,9 @@ func Capabilities(ctx context.Context, client pb.GNMIClient) error {
 
 // val may be a path to a file or it may be json. First see if it is a
 // file, if so return its contents, otherwise return val
-func extractContent(val string, origin string) []byte {
+func extractJSON(val string) []byte {
 	if jsonBytes, err := ioutil.ReadFile(val); err == nil {
 		return jsonBytes
-	}
-	// for CLI commands we don't need to add the outer quotes
-	if origin == "cli" {
-		return []byte(val)
 	}
 	// Best effort check if the value might a string literal, in which
 	// case wrap it in quotes. This is to allow a user to do:
@@ -114,21 +101,11 @@ func extractContent(val string, origin string) []byte {
 
 // StrUpdateVal will return a string representing the value within the supplied update
 func StrUpdateVal(u *pb.Update) string {
-	return strUpdateVal(u, false)
-}
-
-// StrUpdateValCompactJSON will return a string representing the value within the supplied
-// update. If the value is a JSON value, a non-indented JSON string will be returned.
-func StrUpdateValCompactJSON(u *pb.Update) string {
-	return strUpdateVal(u, true)
-}
-
-func strUpdateVal(u *pb.Update, alwaysCompactJSON bool) string {
 	if u.Value != nil {
 		// Backwards compatibility with pre-v0.4 gnmi
 		switch u.Value.Type {
 		case pb.Encoding_JSON, pb.Encoding_JSON_IETF:
-			return strJSON(u.Value.Value, alwaysCompactJSON)
+			return strJSON(u.Value.Value)
 		case pb.Encoding_BYTES, pb.Encoding_PROTO:
 			return base64.StdEncoding.EncodeToString(u.Value.Value)
 		case pb.Encoding_ASCII:
@@ -137,28 +114,18 @@ func strUpdateVal(u *pb.Update, alwaysCompactJSON bool) string {
 			return string(u.Value.Value)
 		}
 	}
-	return strVal(u.Val, alwaysCompactJSON)
+	return StrVal(u.Val)
 }
 
 // StrVal will return a string representing the supplied value
 func StrVal(val *pb.TypedValue) string {
-	return strVal(val, false)
-}
-
-// StrValCompactJSON will return a string representing the supplied value. If the value
-// is a JSON value, a non-indented JSON string will be returned.
-func StrValCompactJSON(val *pb.TypedValue) string {
-	return strVal(val, true)
-}
-
-func strVal(val *pb.TypedValue, alwaysCompactJSON bool) string {
 	switch v := val.GetValue().(type) {
 	case *pb.TypedValue_StringVal:
 		return v.StringVal
 	case *pb.TypedValue_JsonIetfVal:
-		return strJSON(v.JsonIetfVal, alwaysCompactJSON)
+		return strJSON(v.JsonIetfVal)
 	case *pb.TypedValue_JsonVal:
-		return strJSON(v.JsonVal, alwaysCompactJSON)
+		return strJSON(v.JsonVal)
 	case *pb.TypedValue_IntVal:
 		return strconv.FormatInt(v.IntVal, 10)
 	case *pb.TypedValue_UintVal:
@@ -171,8 +138,6 @@ func strVal(val *pb.TypedValue, alwaysCompactJSON bool) string {
 		return strDecimal64(v.DecimalVal)
 	case *pb.TypedValue_FloatVal:
 		return strconv.FormatFloat(float64(v.FloatVal), 'g', -1, 32)
-	case *pb.TypedValue_DoubleVal:
-		return strconv.FormatFloat(float64(v.DoubleVal), 'g', -1, 64)
 	case *pb.TypedValue_LeaflistVal:
 		return strLeaflist(v.LeaflistVal)
 	case *pb.TypedValue_AsciiVal:
@@ -181,25 +146,14 @@ func strVal(val *pb.TypedValue, alwaysCompactJSON bool) string {
 		return v.AnyVal.String()
 	case *pb.TypedValue_ProtoBytes:
 		return base64.StdEncoding.EncodeToString(v.ProtoBytes)
-	case nil:
-		return ""
 	default:
 		panic(v)
 	}
 }
 
-func strJSON(inJSON []byte, alwaysCompactJSON bool) string {
-	var (
-		out bytes.Buffer
-		err error
-	)
-	// Check for ',' as simple heuristic on whether to expand JSON
-	// onto multiple lines, or compact it to a single line.
-	if !alwaysCompactJSON && bytes.Contains(inJSON, []byte{','}) {
-		err = json.Indent(&out, inJSON, "", "  ")
-	} else {
-		err = json.Compact(&out, inJSON)
-	}
+func strJSON(inJSON []byte) string {
+	var out bytes.Buffer
+	err := json.Indent(&out, inJSON, "", "  ")
 	if err != nil {
 		return fmt.Sprintf("(error unmarshalling json: %s)\n", err) + string(inJSON)
 	}
@@ -220,15 +174,10 @@ func strDecimal64(d *pb.Decimal64) string {
 	} else {
 		i = d.Digits
 	}
-	format := "%d.%0*d"
 	if frac < 0 {
-		if i == 0 {
-			// The integer part doesn't provide the necessary minus sign.
-			format = "-" + format
-		}
 		frac = -frac
 	}
-	return fmt.Sprintf(format, i, int(d.Precision), frac)
+	return fmt.Sprintf("%d.%d", i, frac)
 }
 
 // strLeafList builds a human-readable form of a leaf-list. e.g. [1, 2, 3] or [a, b, c]
@@ -247,75 +196,19 @@ func strLeaflist(v *pb.ScalarArray) string {
 	return b.String()
 }
 
-// TypedValue marshals an interface into a gNMI TypedValue value
-func TypedValue(val interface{}) *pb.TypedValue {
-	// TODO: handle more types:
-	// maps
-	// key.Key
-	// key.Map
-	// ... etc
-	switch v := val.(type) {
-	case *pb.TypedValue:
-		return v
-	case string:
-		return &pb.TypedValue{Value: &pb.TypedValue_StringVal{StringVal: v}}
-	case int:
-		return &pb.TypedValue{Value: &pb.TypedValue_IntVal{IntVal: int64(v)}}
-	case int8:
-		return &pb.TypedValue{Value: &pb.TypedValue_IntVal{IntVal: int64(v)}}
-	case int16:
-		return &pb.TypedValue{Value: &pb.TypedValue_IntVal{IntVal: int64(v)}}
-	case int32:
-		return &pb.TypedValue{Value: &pb.TypedValue_IntVal{IntVal: int64(v)}}
-	case int64:
-		return &pb.TypedValue{Value: &pb.TypedValue_IntVal{IntVal: v}}
-	case uint:
-		return &pb.TypedValue{Value: &pb.TypedValue_UintVal{UintVal: uint64(v)}}
-	case uint8:
-		return &pb.TypedValue{Value: &pb.TypedValue_UintVal{UintVal: uint64(v)}}
-	case uint16:
-		return &pb.TypedValue{Value: &pb.TypedValue_UintVal{UintVal: uint64(v)}}
-	case uint32:
-		return &pb.TypedValue{Value: &pb.TypedValue_UintVal{UintVal: uint64(v)}}
-	case uint64:
-		return &pb.TypedValue{Value: &pb.TypedValue_UintVal{UintVal: v}}
-	case bool:
-		return &pb.TypedValue{Value: &pb.TypedValue_BoolVal{BoolVal: v}}
-	case float32:
-		return &pb.TypedValue{Value: &pb.TypedValue_FloatVal{FloatVal: v}}
-	case float64:
-		return &pb.TypedValue{Value: &pb.TypedValue_DoubleVal{DoubleVal: v}}
-	case []byte:
-		return &pb.TypedValue{Value: &pb.TypedValue_BytesVal{BytesVal: v}}
-	case []interface{}:
-		gnmiElems := make([]*pb.TypedValue, len(v))
-		for i, elem := range v {
-			gnmiElems[i] = TypedValue(elem)
-		}
-		return &pb.TypedValue{
-			Value: &pb.TypedValue_LeaflistVal{
-				LeaflistVal: &pb.ScalarArray{
-					Element: gnmiElems,
-				}}}
-	default:
-		panic(fmt.Sprintf("unexpected type %T for value %v", val, val))
-	}
-}
-
 // ExtractValue pulls a value out of a gNMI Update, parsing JSON if present.
 // Possible return types:
-//
-//	string
-//	int64
-//	uint64
-//	bool
-//	[]byte
-//	float32
-//	*gnmi.Decimal64
-//	json.Number
-//	*any.Any
-//	[]interface{}
-//	map[string]interface{}
+//  string
+//  int64
+//  uint64
+//  bool
+//  []byte
+//  float32
+//  *gnmi.Decimal64
+//  json.Number
+//  *any.Any
+//  []interface{}
+//  map[string]interface{}
 func ExtractValue(update *pb.Update) (interface{}, error) {
 	var i interface{}
 	var err error
@@ -344,8 +237,6 @@ func extractValueV04(val *pb.TypedValue) (interface{}, error) {
 		return v.BytesVal, nil
 	case *pb.TypedValue_FloatVal:
 		return v.FloatVal, nil
-	case *pb.TypedValue_DoubleVal:
-		return v.DoubleVal, nil
 	case *pb.TypedValue_DecimalVal:
 		return v.DecimalVal, nil
 	case *pb.TypedValue_LeaflistVal:
@@ -401,15 +292,15 @@ func DecimalToFloat(dec *pb.Decimal64) float64 {
 func update(p *pb.Path, val string) (*pb.Update, error) {
 	var v *pb.TypedValue
 	switch p.Origin {
-	case "", "openconfig":
+	case "":
 		v = &pb.TypedValue{
-			Value: &pb.TypedValue_JsonIetfVal{JsonIetfVal: extractContent(val, p.Origin)}}
+			Value: &pb.TypedValue_JsonIetfVal{JsonIetfVal: extractJSON(val)}}
 	case "eos_native":
 		v = &pb.TypedValue{
-			Value: &pb.TypedValue_JsonVal{JsonVal: extractContent(val, p.Origin)}}
+			Value: &pb.TypedValue_JsonVal{JsonVal: extractJSON(val)}}
 	case "cli", "test-regen-cli":
 		v = &pb.TypedValue{
-			Value: &pb.TypedValue_AsciiVal{AsciiVal: string(extractContent(val, p.Origin))}}
+			Value: &pb.TypedValue_AsciiVal{AsciiVal: val}}
 	case "p4_config":
 		b, err := ioutil.ReadFile(val)
 		if err != nil {
@@ -428,12 +319,11 @@ func update(p *pb.Path, val string) (*pb.Update, error) {
 type Operation struct {
 	Type   string
 	Origin string
-	Target string
 	Path   []string
 	Val    string
 }
 
-func newSetRequest(setOps []*Operation, exts ...*gnmi_ext.Extension) (*pb.SetRequest, error) {
+func newSetRequest(setOps []*Operation) (*pb.SetRequest, error) {
 	req := &pb.SetRequest{}
 	for _, op := range setOps {
 		p, err := ParseGNMIElements(op.Path)
@@ -441,13 +331,6 @@ func newSetRequest(setOps []*Operation, exts ...*gnmi_ext.Extension) (*pb.SetReq
 			return nil, err
 		}
 		p.Origin = op.Origin
-
-		// Target must apply to the entire SetRequest.
-		if op.Target != "" {
-			req.Prefix = &pb.Path{
-				Target: op.Target,
-			}
-		}
 
 		switch op.Type {
 		case "delete":
@@ -464,24 +347,14 @@ func newSetRequest(setOps []*Operation, exts ...*gnmi_ext.Extension) (*pb.SetReq
 				return nil, err
 			}
 			req.Replace = append(req.Replace, u)
-		case "union_replace":
-			u, err := update(p, op.Val)
-			if err != nil {
-				return nil, err
-			}
-			req.UnionReplace = append(req.UnionReplace, u)
 		}
-	}
-	for _, ext := range exts {
-		req.Extension = append(req.Extension, ext)
 	}
 	return req, nil
 }
 
 // Set sends a SetRequest to the given client.
-func Set(ctx context.Context, client pb.GNMIClient, setOps []*Operation,
-	exts ...*gnmi_ext.Extension) error {
-	req, err := newSetRequest(setOps, exts...)
+func Set(ctx context.Context, client pb.GNMIClient, setOps []*Operation) error {
+	req, err := newSetRequest(setOps)
 	if err != nil {
 		return err
 	}
@@ -492,6 +365,8 @@ func Set(ctx context.Context, client pb.GNMIClient, setOps []*Operation,
 	if resp.Message != nil && codes.Code(resp.Message.Code) != codes.OK {
 		return errors.New(resp.Message.Message)
 	}
+	// TODO: Iterate over SetResponse.Response for more detailed error message?
+
 	return nil
 }
 
@@ -499,7 +374,6 @@ func Set(ctx context.Context, client pb.GNMIClient, setOps []*Operation,
 // Deprecated: Use SubscribeErr instead.
 func Subscribe(ctx context.Context, client pb.GNMIClient, subscribeOptions *SubscribeOptions,
 	respChan chan<- *pb.SubscribeResponse, errChan chan<- error) {
-	defer close(errChan)
 	if err := SubscribeErr(ctx, client, subscribeOptions, respChan); err != nil {
 		errChan <- err
 	}
@@ -524,12 +398,6 @@ func SubscribeErr(ctx context.Context, client pb.GNMIClient, subscribeOptions *S
 	if err := stream.Send(req); err != nil {
 		return err
 	}
-	if subscribeOptions.Mode != "poll" {
-		// Non polling subscriptions are not expected to submit any other messages to server.
-		if err := stream.CloseSend(); err != nil {
-			return err
-		}
-	}
 
 	for {
 		resp, err := stream.Recv()
@@ -539,12 +407,7 @@ func SubscribeErr(ctx context.Context, client pb.GNMIClient, subscribeOptions *S
 			}
 			return err
 		}
-
-		select {
-		case respChan <- resp:
-		case <-ctx.Done():
-			return ctx.Err()
-		}
+		respChan <- resp
 
 		// For POLL subscriptions, initiate a poll request by pressing ENTER
 		if subscribeOptions.Mode == "poll" {
@@ -579,20 +442,14 @@ func LogSubscribeResponse(response *pb.SubscribeResponse) error {
 	case *pb.SubscribeResponse_Update:
 		t := time.Unix(0, resp.Update.Timestamp).UTC()
 		prefix := StrPath(resp.Update.Prefix)
-		var target string
-		if t := resp.Update.Prefix.GetTarget(); t != "" {
-			target = "(" + t + ") "
-		}
-		for _, del := range resp.Update.Delete {
-			fmt.Printf("[%s] %sDeleted %s\n", t.Format(time.RFC3339Nano),
-				target,
-				path.Join(prefix, StrPath(del)))
-		}
 		for _, update := range resp.Update.Update {
-			fmt.Printf("[%s] %s%s = %s\n", t.Format(time.RFC3339Nano),
-				target,
+			fmt.Printf("[%s] %s = %s\n", t.Format(time.RFC3339Nano),
 				path.Join(prefix, StrPath(update.Path)),
 				StrUpdateVal(update))
+		}
+		for _, del := range resp.Update.Delete {
+			fmt.Printf("[%s] Deleted %s\n", t.Format(time.RFC3339Nano),
+				path.Join(prefix, StrPath(del)))
 		}
 	}
 	return nil

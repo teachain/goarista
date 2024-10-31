@@ -7,7 +7,6 @@ package netns
 import (
 	"bufio"
 	"errors"
-	"fmt"
 	"io"
 	"net"
 	"os"
@@ -16,42 +15,40 @@ import (
 	"time"
 
 	"github.com/aristanetworks/fsnotify"
-	"github.com/teachain/goarista/logger"
+	"github.com/aristanetworks/glog"
+	"github.com/aristanetworks/goarista/dscp"
 )
 
-// ListenerCreator is the signature of a function which creates a listener,
-// for use in functions where custom listeners can be generated
-type ListenerCreator func() (net.Listener, error)
-
-var makeListener = func(nsName string, listenerCreator ListenerCreator) (net.Listener, error) {
+var makeListener = func(nsName string, addr *net.TCPAddr, tos byte) (net.Listener, error) {
 	var listener net.Listener
 	err := Do(nsName, func() error {
 		var err error
-		listener, err = listenerCreator()
+		listener, err = dscp.ListenTCPWithTOS(addr, tos)
 		return err
 	})
 	return listener, err
 }
 
-func accept(listener net.Listener, conns chan<- net.Conn, logger logger.Logger) {
+func accept(listener net.Listener, conns chan<- net.Conn) {
 	for {
 		c, err := listener.Accept()
 		if err != nil {
-			logger.Infof("Accept error: %v", err)
+			glog.Infof("Accept error: %v", err)
 			return
 		}
 		conns <- c
 	}
 }
 
-func (l *nsListener) waitForMount() bool {
-	for !hasMount(l.nsFile, l.logger) {
+func waitForMount(mountPoint string) bool {
+	for !hasMount(mountPoint) {
 		time.Sleep(time.Second)
-		if _, err := os.Stat(l.nsFile); err != nil {
-			l.logger.Infof("error stating %s: %v", l.nsFile, err)
+		if _, err := os.Stat(mountPoint); err != nil {
+			glog.Infof("error stating %s: %v", mountPoint, err)
 			return false
 		}
 	}
+
 	return true
 }
 
@@ -59,44 +56,44 @@ func (l *nsListener) waitForMount() bool {
 // and in case it gets deleted and recreated it will automatically bind to the newly created
 // namespace.
 type nsListener struct {
-	listener        net.Listener
-	watcher         *fsnotify.Watcher
-	nsName          string
-	nsFile          string
-	addr            *net.TCPAddr
-	done            chan struct{}
-	conns           chan net.Conn
-	logger          logger.Logger
-	listenerCreator ListenerCreator
+	listener net.Listener
+	watcher  *fsnotify.Watcher
+	nsName   string
+	nsFile   string
+	addr     *net.TCPAddr
+	tos      byte
+	done     chan struct{}
+	conns    chan net.Conn
 }
 
 func (l *nsListener) tearDown() {
 	if l.listener != nil {
-		l.logger.Info("Destroying listener")
+		glog.Info("Destroying listener")
 		l.listener.Close()
 		l.listener = nil
 	}
 }
 
 func (l *nsListener) setUp() bool {
-	l.logger.Infof("Creating listener in namespace %v", l.nsName)
+	glog.Infof("Creating listener in namespace %v", l.nsName)
 	if err := l.watcher.Add(l.nsFile); err != nil {
-		l.logger.Infof("Can't watch the file (will try again): %v", err)
+		glog.Infof("Can't watch the file (will try again): %v", err)
 		return false
 	}
-	listener, err := makeListener(l.nsName, l.listenerCreator)
+	listener, err := makeListener(l.nsName, l.addr, l.tos)
 	if err != nil {
-		l.logger.Infof("Can't create TCP listener (will try again): %v", err)
+		glog.Infof("Can't create TCP listener (will try again): %v", err)
 		return false
 	}
 	l.listener = listener
-	go accept(l.listener, l.conns, l.logger)
+	go accept(l.listener, l.conns)
+
 	return true
 }
 
 func (l *nsListener) watch() {
 	var mounted bool
-	if hasMount(l.nsFile, l.logger) {
+	if hasMount(l.nsFile) {
 		mounted = l.setUp()
 	}
 
@@ -117,7 +114,7 @@ func (l *nsListener) watch() {
 				continue
 			}
 			if ev.Op&fsnotify.Create == fsnotify.Create {
-				if mounted || !l.waitForMount() {
+				if mounted || !waitForMount(l.nsFile) {
 					continue
 				}
 				mounted = l.setUp()
@@ -144,19 +141,14 @@ func (l *nsListener) setupWatch() error {
 	return nil
 }
 
-func newNSListenerWithDir(nsDir, nsName string, addr *net.TCPAddr, logger logger.Logger,
-	listenerCreator ListenerCreator) (net.Listener, error) {
-	if listenerCreator == nil {
-		return nil, fmt.Errorf("newNSListenerWithDir received nil listenerCreator")
-	}
+func newNSListenerWithDir(nsDir, nsName string, addr *net.TCPAddr, tos byte) (net.Listener, error) {
 	l := &nsListener{
-		nsName:          nsName,
-		nsFile:          filepath.Join(nsDir, nsName),
-		addr:            addr,
-		done:            make(chan struct{}),
-		conns:           make(chan net.Conn),
-		logger:          logger,
-		listenerCreator: listenerCreator,
+		nsName: nsName,
+		nsFile: filepath.Join(nsDir, nsName),
+		addr:   addr,
+		tos:    tos,
+		done:   make(chan struct{}),
+		conns:  make(chan net.Conn),
 	}
 	if err := l.setupWatch(); err != nil {
 		return nil, err

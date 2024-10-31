@@ -6,9 +6,10 @@ package influxlib
 
 import (
 	"fmt"
-	"strings"
 	"testing"
 	"time"
+
+	"github.com/stretchr/testify/assert"
 )
 
 func testFields(line string, fields map[string]interface{},
@@ -19,21 +20,16 @@ func testFields(line string, fields map[string]interface{},
 		if _, ok := v.(string); ok {
 			formatString = "%s=%q"
 		}
-		expected := fmt.Sprintf(formatString, k, v)
-		if !strings.Contains(line, expected) {
-			t.Errorf("%s expected in %s", expected, line)
-		}
-
+		assert.Contains(t, line, fmt.Sprintf(formatString, k, v),
+			fmt.Sprintf(formatString+" expected in %s", k, v, line))
 	}
 }
 
 func testTags(line string, tags map[string]string,
 	t *testing.T) {
 	for k, v := range tags {
-		expected := fmt.Sprintf("%s=%s", k, v)
-		if !strings.Contains(line, expected) {
-			t.Errorf("%s expected in %s", expected, line)
-		}
+		assert.Contains(t, line, fmt.Sprintf("%s=%s", k, v),
+			fmt.Sprintf("%s=%s expected in %s", k, v, line))
 	}
 }
 
@@ -53,36 +49,32 @@ func TestBasicWrite(t *testing.T) {
 	}
 
 	err := testConn.WritePoint(measurement, tags, fields)
-	if err != nil {
-		t.Fatal(err)
-	}
+	assert.NoError(t, err)
 
 	line, err := GetTestBuffer(testConn)
-	if err != nil {
-		t.Fatal(err)
-	}
+	assert.NoError(t, err)
 
-	if !strings.HasPrefix(line, measurement) {
-		t.Fatalf("expected to find prefix %s in %s", measurement, line)
-	}
+	assert.Contains(t, line, measurement,
+		fmt.Sprintf("%s does not appear in %s", measurement, line))
 	testTags(line, tags, t)
 	testFields(line, fields, t)
 }
 
 func TestConnectionToHostFailure(t *testing.T) {
+	assert := assert.New(t)
+	var err error
+
 	config := &InfluxConfig{
 		Port:     8086,
 		Protocol: HTTP,
 		Database: "test",
 	}
 	config.Hostname = "this is fake.com"
-	if _, err := Connect(config); err == nil {
-		t.Fatal("got no error")
-	}
+	_, err = Connect(config)
+	assert.Error(err)
 	config.Hostname = "\\-Fake.Url.Com"
-	if _, err := Connect(config); err == nil {
-		t.Fatal("got no error")
-	}
+	_, err = Connect(config)
+	assert.Error(err)
 }
 
 func TestWriteFailure(t *testing.T) {
@@ -95,24 +87,24 @@ func TestWriteFailure(t *testing.T) {
 	data := map[string]interface{}{
 		"Data1": "cats",
 	}
-	if err := con.WritePoint(measurement, tags, data); err != nil {
-		t.Fatal(err)
-	}
+	err := con.WritePoint(measurement, tags, data)
+	assert.NoError(t, err)
 
 	fc, _ := con.Client.(*fakeClient)
 	fc.failAll = true
 
-	if err := con.WritePoint(measurement, tags, data); err == nil {
-		t.Fatal("got no error")
-	}
+	err = con.WritePoint(measurement, tags, data)
+	assert.Error(t, err)
 }
 
 func TestQuery(t *testing.T) {
 	query := "SELECT * FROM 'system' LIMIT 50;"
+
 	con, _ := NewMockConnection()
-	if _, err := con.Query(query); err != nil {
-		t.Fatal(err)
-	}
+
+	_, err := con.Query(query)
+
+	assert.NoError(t, err)
 }
 
 func TestAddAndWriteBatchPoints(t *testing.T) {
@@ -151,18 +143,13 @@ func TestAddAndWriteBatchPoints(t *testing.T) {
 	}
 
 	err := testConn.RecordBatchPoints(points)
-	if err != nil {
-		t.Fatal(err)
-	}
+	assert.NoError(t, err)
 
 	line, err := GetTestBuffer(testConn)
-	if err != nil {
-		t.Fatal(err)
-	}
+	assert.NoError(t, err)
 
-	if !strings.Contains(line, measurement) {
-		t.Fatalf("%s does not appear in %s", measurement, line)
-	}
+	assert.Contains(t, line, measurement,
+		fmt.Sprintf("%s does not appear in %s", measurement, line))
 	for _, p := range points {
 		testTags(line, p.Tags, t)
 		testFields(line, p.Fields, t)

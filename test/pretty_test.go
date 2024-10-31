@@ -9,7 +9,7 @@ import (
 	"testing"
 	"unsafe"
 
-	. "github.com/teachain/goarista/test"
+	. "github.com/aristanetworks/goarista/test"
 )
 
 type alias int

@@ -4,11 +4,7 @@
 
 package lanz
 
-import (
-	"time"
-
-	"github.com/teachain/goarista/logger"
-)
+import "time"
 
 // Option is a LANZ client factory option.
 type Option func(c *client)
@@ -42,12 +38,5 @@ func WithTimeout(d time.Duration) Option {
 func WithBackoff(d time.Duration) Option {
 	return func(c *client) {
 		c.backoff = d
-	}
-}
-
-// WithLogger sets the logger to be used by this lanz client.
-func WithLogger(l logger.Logger) Option {
-	return func(c *client) {
-		c.log = l
 	}
 }

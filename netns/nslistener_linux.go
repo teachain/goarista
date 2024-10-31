@@ -9,14 +9,13 @@ import (
 	"net"
 	"os"
 
-	"github.com/teachain/goarista/dscp"
-	"github.com/teachain/goarista/logger"
+	"github.com/aristanetworks/glog"
 )
 
-var hasMount = func(mountPoint string, logger logger.Logger) bool {
+var hasMount = func(mountPoint string) bool {
 	fd, err := os.Open("/proc/mounts")
 	if err != nil {
-		logger.Fatal("can't open /proc/mounts")
+		glog.Fatalf("can't open /proc/mounts")
 	}
 	defer fd.Close()
 
@@ -35,27 +34,16 @@ func getNsDir() (string, error) {
 
 // NewNSListener creates a new net.Listener bound to a network namespace. The listening socket will
 // be bound to the specified local address and will have the specified tos.
-func NewNSListener(nsName string, addr *net.TCPAddr, tos byte, logger logger.Logger) (net.Listener,
-	error) {
-	return NewNSListenerWithCustomListener(nsName, addr, logger,
-		func() (net.Listener, error) {
-			return dscp.ListenTCPWithTOSLogger(addr, tos, logger)
-		})
-}
-
-// NewNSListenerWithCustomListener creates a new net.Listener bound to a network namespace. The
-// listener is created using listenerCreator. listenerCreator should create a listener that
-// binds to addr. listenerCreator may be called multiple times if the vrf is deleted and recreated.
-func NewNSListenerWithCustomListener(nsName string, addr *net.TCPAddr, logger logger.Logger,
-	listenerCreator ListenerCreator) (net.Listener, error) {
+func NewNSListener(nsName string, addr *net.TCPAddr, tos byte) (net.Listener, error) {
 	// The default namespace doesn't get recreated and avoid the watcher helps with environments
 	// that aren't setup for multiple namespaces (eg inside containers)
 	if nsName == "" || nsName == "default" {
-		return makeListener(nsName, listenerCreator)
+		return makeListener(nsName, addr, tos)
 	}
 	nsDir, err := getNsDir()
 	if err != nil {
 		return nil, err
 	}
-	return newNSListenerWithDir(nsDir, nsName, addr, logger, listenerCreator)
+
+	return newNSListenerWithDir(nsDir, nsName, addr, tos)
 }

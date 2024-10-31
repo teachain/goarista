@@ -11,9 +11,9 @@ import (
 	"os"
 	"testing"
 
-	"github.com/teachain/goarista/test"
-	"google.golang.org/protobuf/proto"
-	"google.golang.org/protobuf/types/known/anypb"
+	"github.com/aristanetworks/goarista/test"
+	"github.com/golang/protobuf/proto"
+	"github.com/golang/protobuf/ptypes/any"
 
 	pb "github.com/openconfig/gnmi/proto/gnmi"
 )
@@ -29,52 +29,32 @@ func TestNewSetRequest(t *testing.T) {
 	pathP4 := &pb.Path{
 		Origin: "p4_config",
 	}
-	pathOC := &pb.Path{
-		Origin: "openconfig",
-	}
 
-	fileData := []struct {
-		name     string
-		fileName string
-		content  string
-	}{{
-		name:     "p4_config",
-		fileName: "p4TestFile",
-		content:  "p4_config test",
-	}, {
-		name:     "originCLIFileData",
-		fileName: "originCLIFile",
-		content: `enable
-configure
-hostname new`,
-	}}
-
-	fileNames := make([]string, 2, 2)
-	for i, data := range fileData {
-		f, err := ioutil.TempFile("", data.name)
-		if err != nil {
-			t.Errorf("cannot create test file for %s", data.name)
-		}
-		filename := f.Name()
-		defer os.Remove(filename)
-		fileNames[i] = filename
-		if _, err := f.WriteString(data.content); err != nil {
-			t.Errorf("cannot write test file for %s", data.name)
-		}
-		f.Close()
+	p4FileContent := "p4_config test"
+	p4TestFile, err := ioutil.TempFile("", "p4TestFile")
+	if err != nil {
+		t.Errorf("cannot create test file for p4_config")
 	}
+	p4Filename := p4TestFile.Name()
+
+	defer os.Remove(p4Filename)
+
+	if _, err := p4TestFile.WriteString(p4FileContent); err != nil {
+		t.Errorf("cannot write test file for p4_config")
+	}
+	p4TestFile.Close()
 
 	testCases := map[string]struct {
 		setOps []*Operation
-		exp    *pb.SetRequest
+		exp    pb.SetRequest
 	}{
 		"delete": {
 			setOps: []*Operation{{Type: "delete", Path: []string{"foo"}}},
-			exp:    &pb.SetRequest{Delete: []*pb.Path{pathFoo}},
+			exp:    pb.SetRequest{Delete: []*pb.Path{pathFoo}},
 		},
 		"update": {
 			setOps: []*Operation{{Type: "update", Path: []string{"foo"}, Val: "true"}},
-			exp: &pb.SetRequest{
+			exp: pb.SetRequest{
 				Update: []*pb.Update{{
 					Path: pathFoo,
 					Val: &pb.TypedValue{
@@ -84,7 +64,7 @@ hostname new`,
 		},
 		"replace": {
 			setOps: []*Operation{{Type: "replace", Path: []string{"foo"}, Val: "true"}},
-			exp: &pb.SetRequest{
+			exp: pb.SetRequest{
 				Replace: []*pb.Update{{
 					Path: pathFoo,
 					Val: &pb.TypedValue{
@@ -95,7 +75,7 @@ hostname new`,
 		"cli-replace": {
 			setOps: []*Operation{{Type: "replace", Origin: "cli",
 				Val: "hostname foo\nip routing"}},
-			exp: &pb.SetRequest{
+			exp: pb.SetRequest{
 				Replace: []*pb.Update{{
 					Path: pathCli,
 					Val: &pb.TypedValue{
@@ -105,74 +85,12 @@ hostname new`,
 		},
 		"p4_config": {
 			setOps: []*Operation{{Type: "replace", Origin: "p4_config",
-				Val: fileNames[0]}},
-			exp: &pb.SetRequest{
+				Val: p4Filename}},
+			exp: pb.SetRequest{
 				Replace: []*pb.Update{{
 					Path: pathP4,
 					Val: &pb.TypedValue{
-						Value: &pb.TypedValue_ProtoBytes{ProtoBytes: []byte(fileData[0].content)}},
-				}},
-			},
-		},
-		"target": {
-			setOps: []*Operation{{Type: "replace", Target: "JPE1234567",
-				Path: []string{"foo"}, Val: "true"}},
-			exp: &pb.SetRequest{
-				Prefix: &pb.Path{Target: "JPE1234567"},
-				Replace: []*pb.Update{{
-					Path: pathFoo,
-					Val: &pb.TypedValue{
-						Value: &pb.TypedValue_JsonIetfVal{JsonIetfVal: []byte("true")}},
-				}},
-			},
-		},
-		"openconfig origin": {
-			setOps: []*Operation{{Type: "replace", Origin: "openconfig",
-				Val: "true"}},
-			exp: &pb.SetRequest{
-				Replace: []*pb.Update{{
-					Path: pathOC,
-					Val: &pb.TypedValue{
-						Value: &pb.TypedValue_JsonIetfVal{
-							JsonIetfVal: []byte("true"),
-						},
-					},
-				}},
-			},
-		},
-		"originCLI file": {
-			setOps: []*Operation{{Type: "update", Origin: "cli",
-				Val: fileNames[1]}},
-			exp: &pb.SetRequest{
-				Update: []*pb.Update{{
-					Path: pathCli,
-					Val: &pb.TypedValue{
-						Value: &pb.TypedValue_AsciiVal{AsciiVal: fileData[1].content}},
-				}},
-			},
-		},
-		"union_replace": {
-			setOps: []*Operation{{Type: "union_replace", Path: []string{"foo"}, Val: "true"}},
-			exp: &pb.SetRequest{
-				UnionReplace: []*pb.Update{{
-					Path: pathFoo,
-					Val: &pb.TypedValue{
-						Value: &pb.TypedValue_JsonIetfVal{JsonIetfVal: []byte("true")}},
-				}},
-			},
-		},
-		"union_replace openconfig and cli origin": {
-			setOps: []*Operation{{Type: "union_replace", Origin: "openconfig", Val: "true"},
-				{Type: "union_replace", Origin: "cli", Val: fileNames[1]}},
-			exp: &pb.SetRequest{
-				UnionReplace: []*pb.Update{{
-					Path: pathOC,
-					Val: &pb.TypedValue{
-						Value: &pb.TypedValue_JsonIetfVal{JsonIetfVal: []byte("true")}},
-				}, {
-					Path: pathCli,
-					Val: &pb.TypedValue{
-						Value: &pb.TypedValue_AsciiVal{AsciiVal: fileData[1].content}},
+						Value: &pb.TypedValue_ProtoBytes{ProtoBytes: []byte(p4FileContent)}},
 				}},
 			},
 		},
@@ -184,8 +102,8 @@ hostname new`,
 			if err != nil {
 				t.Fatal(err)
 			}
-			if !proto.Equal(tc.exp, got) {
-				t.Errorf("Exp: %v Got: %v", tc.exp, got)
+			if diff := test.Diff(tc.exp, *got); diff != "" {
+				t.Errorf("unexpected diff: %s", diff)
 			}
 		})
 	}
@@ -196,7 +114,8 @@ func TestStrUpdateVal(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	anyMessage := &anypb.Any{TypeUrl: "gnmi/ModelData", Value: anyBytes}
+	anyMessage := &any.Any{TypeUrl: "gnmi/ModelData", Value: anyBytes}
+	anyString := proto.CompactTextString(anyMessage)
 
 	for name, tc := range map[string]struct {
 		update *pb.Update
@@ -207,14 +126,18 @@ func TestStrUpdateVal(t *testing.T) {
 				Value: &pb.Value{
 					Value: []byte(`{"foo":"bar"}`),
 					Type:  pb.Encoding_JSON}},
-			exp: `{"foo":"bar"}`,
+			exp: `{
+  "foo": "bar"
+}`,
 		},
 		"JSON_IETF Value": {
 			update: &pb.Update{
 				Value: &pb.Value{
 					Value: []byte(`{"foo":"bar"}`),
 					Type:  pb.Encoding_JSON_IETF}},
-			exp: `{"foo":"bar"}`,
+			exp: `{
+  "foo": "bar"
+}`,
 		},
 		"BYTES Value": {
 			update: &pb.Update{
@@ -274,45 +197,12 @@ func TestStrUpdateVal(t *testing.T) {
 				Value: &pb.TypedValue_FloatVal{FloatVal: 3.14}}},
 			exp: "3.14",
 		},
-		"DoubleVal": {
-			update: &pb.Update{Val: &pb.TypedValue{
-				Value: &pb.TypedValue_DoubleVal{DoubleVal: 3.14}}},
-			exp: "3.14",
-		},
 		"DecimalVal": {
 			update: &pb.Update{Val: &pb.TypedValue{
 				Value: &pb.TypedValue_DecimalVal{
-					DecimalVal: &pb.Decimal64{Digits: 3014, Precision: 3},
+					DecimalVal: &pb.Decimal64{Digits: 314, Precision: 2},
 				}}},
-			exp: "3.014",
-		},
-		"DecimalValWithLeadingZeros": {
-			update: &pb.Update{Val: &pb.TypedValue{
-				Value: &pb.TypedValue_DecimalVal{
-					DecimalVal: &pb.Decimal64{Digits: 314, Precision: 6},
-				}}},
-			exp: "0.000314",
-		},
-		"DecimalValWithLeadingZerosInFraction": {
-			update: &pb.Update{Val: &pb.TypedValue{
-				Value: &pb.TypedValue_DecimalVal{
-					DecimalVal: &pb.Decimal64{Digits: 3000141, Precision: 6},
-				}}},
-			exp: "3.000141",
-		},
-		"DecimalValWithZeroPrecision": {
-			update: &pb.Update{Val: &pb.TypedValue{
-				Value: &pb.TypedValue_DecimalVal{
-					DecimalVal: &pb.Decimal64{Digits: 314, Precision: 0},
-				}}},
-			exp: "314.0",
-		},
-		"DecimalValWithNegativeFraction": {
-			update: &pb.Update{Val: &pb.TypedValue{
-				Value: &pb.TypedValue_DecimalVal{
-					DecimalVal: &pb.Decimal64{Digits: -314, Precision: 3},
-				}}},
-			exp: "-0.314",
+			exp: "3.14",
 		},
 		"LeafListVal": {
 			update: &pb.Update{Val: &pb.TypedValue{
@@ -327,25 +217,21 @@ func TestStrUpdateVal(t *testing.T) {
 		"AnyVal": {
 			update: &pb.Update{Val: &pb.TypedValue{
 				Value: &pb.TypedValue_AnyVal{AnyVal: anyMessage}}},
-			exp: anyMessage.String(),
+			exp: anyString,
 		},
 		"JsonVal": {
 			update: &pb.Update{Val: &pb.TypedValue{
 				Value: &pb.TypedValue_JsonVal{JsonVal: []byte(`{"foo":"bar"}`)}}},
-			exp: `{"foo":"bar"}`,
-		},
-		"JsonVal_complex": {
-			update: &pb.Update{Val: &pb.TypedValue{
-				Value: &pb.TypedValue_JsonVal{JsonVal: []byte(`{"foo":"bar","baz":"qux"}`)}}},
 			exp: `{
-  "foo": "bar",
-  "baz": "qux"
+  "foo": "bar"
 }`,
 		},
 		"JsonIetfVal": {
 			update: &pb.Update{Val: &pb.TypedValue{
 				Value: &pb.TypedValue_JsonIetfVal{JsonIetfVal: []byte(`{"foo":"bar"}`)}}},
-			exp: `{"foo":"bar"}`,
+			exp: `{
+  "foo": "bar"
+}`,
 		},
 		"AsciiVal": {
 			update: &pb.Update{Val: &pb.TypedValue{
@@ -367,68 +253,8 @@ func TestStrUpdateVal(t *testing.T) {
 	}
 }
 
-func TestTypedValue(t *testing.T) {
-	for tname, tcase := range map[string]struct {
-		in  interface{}
-		exp *pb.TypedValue
-	}{
-		"string": {
-			in:  "foo",
-			exp: &pb.TypedValue{Value: &pb.TypedValue_StringVal{StringVal: "foo"}},
-		},
-		"int": {
-			in:  42,
-			exp: &pb.TypedValue{Value: &pb.TypedValue_IntVal{IntVal: 42}},
-		},
-		"int64": {
-			in:  int64(42),
-			exp: &pb.TypedValue{Value: &pb.TypedValue_IntVal{IntVal: 42}},
-		},
-		"uint": {
-			in:  uint(42),
-			exp: &pb.TypedValue{Value: &pb.TypedValue_UintVal{UintVal: 42}},
-		},
-		"float32": {
-			in:  float32(42.234123),
-			exp: &pb.TypedValue{Value: &pb.TypedValue_FloatVal{FloatVal: 42.234123}},
-		},
-		"float64": {
-			in:  float64(42.234124222222),
-			exp: &pb.TypedValue{Value: &pb.TypedValue_DoubleVal{DoubleVal: 42.234124222222}},
-		},
-		"bool": {
-			in:  true,
-			exp: &pb.TypedValue{Value: &pb.TypedValue_BoolVal{BoolVal: true}},
-		},
-		"slice": {
-			in: []interface{}{"foo", 1, uint(2), true},
-			exp: &pb.TypedValue{Value: &pb.TypedValue_LeaflistVal{LeaflistVal: &pb.ScalarArray{
-				Element: []*pb.TypedValue{
-					&pb.TypedValue{Value: &pb.TypedValue_StringVal{StringVal: "foo"}},
-					&pb.TypedValue{Value: &pb.TypedValue_IntVal{IntVal: 1}},
-					&pb.TypedValue{Value: &pb.TypedValue_UintVal{UintVal: 2}},
-					&pb.TypedValue{Value: &pb.TypedValue_BoolVal{BoolVal: true}},
-				}}}},
-		},
-		"bytes": {
-			in:  []byte("foo"),
-			exp: &pb.TypedValue{Value: &pb.TypedValue_BytesVal{BytesVal: []byte("foo")}},
-		},
-		"typed val": {
-			in:  &pb.TypedValue{Value: &pb.TypedValue_StringVal{StringVal: "foo"}},
-			exp: &pb.TypedValue{Value: &pb.TypedValue_StringVal{StringVal: "foo"}},
-		},
-	} {
-		t.Run(tname, func(t *testing.T) {
-			if got := TypedValue(tcase.in); !test.DeepEqual(got, tcase.exp) {
-				t.Errorf("Expected: %q Got: %q", tcase.exp, got)
-			}
-		})
-	}
-}
-
 func TestExtractJSON(t *testing.T) {
-	jsonFile, err := ioutil.TempFile("", "extractContent")
+	jsonFile, err := ioutil.TempFile("", "extractJSON")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -460,7 +286,7 @@ func TestExtractJSON(t *testing.T) {
 		"[]":            []byte("[]"),
 	} {
 		t.Run(val, func(t *testing.T) {
-			got := extractContent(val, "")
+			got := extractJSON(val)
 			if !bytes.Equal(exp, got) {
 				t.Errorf("Unexpected diff. Expected: %q Got: %q", exp, got)
 			}
@@ -496,10 +322,6 @@ func TestExtractValue(t *testing.T) {
 		in: &pb.Update{Val: &pb.TypedValue{
 			Value: &pb.TypedValue_FloatVal{FloatVal: -12.34}}},
 		exp: float32(-12.34),
-	}, {
-		in: &pb.Update{Val: &pb.TypedValue{
-			Value: &pb.TypedValue_DoubleVal{DoubleVal: -12.34}}},
-		exp: float64(-12.34),
 	}, {
 		in: &pb.Update{Val: &pb.TypedValue{
 			Value: &pb.TypedValue_DecimalVal{DecimalVal: &pb.Decimal64{

@@ -8,7 +8,7 @@ import (
 	"net"
 	"testing"
 
-	"github.com/teachain/goarista/dscp"
+	"github.com/aristanetworks/goarista/dscp"
 )
 
 func TestListenTCPWithTOS(t *testing.T) {
@@ -31,16 +31,16 @@ func testListenTCPWithTOS(t *testing.T, ip string) {
 	go func() {
 		conn, err := listen.Accept()
 		if err != nil {
-			t.Error(err)
+			t.Fatal(err)
 		}
 		defer conn.Close()
 		buf := []byte{'!'}
 		conn.Write(buf)
 		n, err := conn.Read(buf)
 		if n != 1 || err != nil {
-			t.Errorf("Read returned %d / %s", n, err)
+			t.Fatalf("Read returned %d / %s", n, err)
 		} else if buf[0] != '!' {
-			t.Errorf("Expected to read '!' but got %q", buf)
+			t.Fatalf("Expected to read '!' but got %q", buf)
 		}
 		close(done)
 	}()

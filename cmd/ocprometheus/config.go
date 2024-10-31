@@ -6,13 +6,9 @@ package main
 
 import (
 	"fmt"
-	"maps"
 	"regexp"
 	"strconv"
-	"strings"
 
-	"github.com/aristanetworks/glog"
-	gnmiUtils "github.com/teachain/goarista/gnmi"
 	"github.com/prometheus/client_golang/prometheus"
 	"gopkg.in/yaml.v2"
 )
@@ -27,12 +23,6 @@ type Config struct {
 
 	// Metrics to collect and how to munge them.
 	Metrics []*MetricDef
-
-	// Subscribed paths by their origin
-	subsByOrigin map[string][]string
-
-	//DescSubs  paths used
-	DescriptionLabelSubscriptions []string `yaml:"description-label-subscriptions,omitempty"`
 }
 
 // MetricDef is the representation of a metric definiton in the config file.
@@ -61,17 +51,10 @@ type MetricDef struct {
 	stringMetric bool
 
 	// This map contains the metric descriptors for this metric for each device.
-	devDesc map[string]*promDesc
+	devDesc map[string]*prometheus.Desc
 
 	// This is the default metric descriptor for devices that don't have explicit descs.
-	desc *promDesc
-}
-
-type promDesc struct {
-	fqName        string
-	help          string
-	varLabels     []string
-	devPermLabels map[string]string // required labels
+	desc *prometheus.Desc
 }
 
 // metricValues contains the values used in updating a metric
@@ -90,19 +73,6 @@ func parseConfig(cfg []byte) (*Config, error) {
 	if err := yaml.Unmarshal(cfg, config); err != nil {
 		return nil, fmt.Errorf("Failed to parse config: %v", err)
 	}
-
-	config.subsByOrigin = make(map[string][]string)
-	config.addSubscriptions(config.Subscriptions)
-	descNodes := config.DescriptionLabelSubscriptions[:0]
-	for _, p := range config.DescriptionLabelSubscriptions {
-		if !strings.HasSuffix(p, "description") {
-			glog.V(2).Infof("skipping %s as it is not a description node", p)
-			continue
-		}
-		descNodes = append(descNodes, p)
-	}
-	config.DescriptionLabelSubscriptions = descNodes
-
 	for _, def := range config.Metrics {
 		def.re = regexp.MustCompile(def.Path)
 		// Extract label names
@@ -121,25 +91,15 @@ func parseConfig(cfg []byte) (*Config, error) {
 		// Create a default descriptor only if there aren't any per-device labels,
 		// or if it's explicitly declared
 		if len(config.DeviceLabels) == 0 || len(config.DeviceLabels["*"]) > 0 {
-			def.desc = &promDesc{
-				fqName:        def.Name,
-				help:          def.Help,
-				varLabels:     labelNames,
-				devPermLabels: config.DeviceLabels["*"],
-			}
+			def.desc = prometheus.NewDesc(def.Name, def.Help, labelNames, config.DeviceLabels["*"])
 		}
 		// Add per-device descriptors
-		def.devDesc = make(map[string]*promDesc)
+		def.devDesc = make(map[string]*prometheus.Desc)
 		for device, labels := range config.DeviceLabels {
 			if device == "*" {
 				continue
 			}
-			def.devDesc[device] = &promDesc{
-				fqName:        def.Name,
-				help:          def.Help,
-				varLabels:     labelNames,
-				devPermLabels: labels,
-			}
+			def.devDesc[device] = prometheus.NewDesc(def.Name, def.Help, labelNames, labels)
 		}
 	}
 
@@ -149,27 +109,16 @@ func parseConfig(cfg []byte) (*Config, error) {
 // Returns a struct containing the descriptor corresponding to the device and path, labels
 // extracted from the path, the default value for the metric and if it accepts string values.
 // If the device and path doesn't match any metrics, returns nil.
-func (c *Config) getMetricValues(s source,
-	descriptionLabels map[string]map[string]string) *metricValues {
+func (c *Config) getMetricValues(s source) *metricValues {
 	for _, def := range c.Metrics {
 		if groups := def.re.FindStringSubmatch(s.path); groups != nil {
 			if def.ValueLabel != "" {
 				groups = append(groups, def.ValueLabel)
 			}
-			promdescVal, ok := def.devDesc[s.addr]
+			desc, ok := def.devDesc[s.addr]
 			if !ok {
-				promdescVal = def.desc
+				desc = def.desc
 			}
-
-			permLabels := make(map[string]string)
-			maps.Copy(permLabels, promdescVal.devPermLabels)
-
-			closestListParent := findClosestList(s.path)
-			if labels, ok := descriptionLabels[closestListParent]; ok {
-				maps.Copy(permLabels, labels)
-			}
-			desc := prometheus.NewDesc(promdescVal.fqName, promdescVal.help, promdescVal.varLabels,
-				permLabels)
 			return &metricValues{desc: desc, labels: groups[1:], defaultValue: def.DefaultValue,
 				stringMetric: def.stringMetric}
 		}
@@ -178,42 +127,16 @@ func (c *Config) getMetricValues(s source,
 	return nil
 }
 
-func findClosestList(s string) string {
-	vals := gnmiUtils.SplitPath(s)
-	for i := len(vals) - 2; i >= 0; i-- {
-		// simple heuristic to determine if we have a list node instead of converting string
-		//  to gNMI path
-		if strings.Contains(vals[i], "[") {
-			return "/" + strings.Join(vals[:i+1], "/")
-		}
-	}
-	return ""
-}
-
 // Sends all the descriptors to the channel.
 func (c *Config) getAllDescs(ch chan<- *prometheus.Desc) {
 	for _, def := range c.Metrics {
 		// Default descriptor might not be present
 		if def.desc != nil {
-			ch <- prometheus.NewDesc(def.desc.fqName, def.desc.help,
-				def.desc.varLabels, def.desc.devPermLabels)
+			ch <- def.desc
 		}
 
 		for _, desc := range def.devDesc {
-			ch <- prometheus.NewDesc(desc.fqName, desc.help,
-				desc.varLabels, desc.devPermLabels)
-		}
-	}
-}
-
-func (c *Config) addSubscriptions(subscriptions []string) {
-	for _, sub := range subscriptions {
-		parts := strings.SplitN(sub, ":", 2)
-		if len(parts) == 1 || len(parts[0]) == 0 || parts[0][0] == '/' {
-			c.subsByOrigin[""] = append(c.subsByOrigin[""], sub)
-		} else {
-			origin := parts[0]
-			c.subsByOrigin[origin] = append(c.subsByOrigin[origin], parts[1])
+			ch <- desc
 		}
 	}
 }

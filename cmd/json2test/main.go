@@ -9,7 +9,8 @@
 //
 // Usage:
 //
-//	go test -json > out.txt; <analysis program> out.txt; cat out.txt | json2test
+//  go test -json > out.txt; <analysis program> out.txt; cat out.txt | json2test
+//
 package main
 
 import (

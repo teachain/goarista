@@ -13,10 +13,11 @@ import (
 	"testing"
 	"time"
 
-	"github.com/teachain/goarista/lanz"
-	pb "github.com/teachain/goarista/lanz/proto"
+	"github.com/aristanetworks/goarista/lanz"
+	pb "github.com/aristanetworks/goarista/lanz/proto"
 
-	"google.golang.org/protobuf/proto"
+	"github.com/aristanetworks/glog"
+	"github.com/golang/protobuf/proto"
 )
 
 var testProtoBuf = &pb.LanzRecord{
@@ -84,13 +85,13 @@ func launchClient(ch chan<- *pb.LanzRecord, conn lanz.ConnectReadCloser) (lanz.C
 	return c, done
 }
 
-func pbsToStream(t *testing.T, pbs []*pb.LanzRecord) []byte {
+func pbsToStream(pbs []*pb.LanzRecord) []byte {
 	var r []byte
 
 	for _, p := range pbs {
 		b, err := proto.Marshal(p)
 		if err != nil {
-			t.Fatalf("Can't marshal pb: %v", err)
+			glog.Fatalf("Can't marshal pb: %v", err)
 		}
 
 		bLen := uint64(len(b))
@@ -104,8 +105,8 @@ func pbsToStream(t *testing.T, pbs []*pb.LanzRecord) []byte {
 	return r
 }
 
-func testStream(t *testing.T) []byte {
-	return pbsToStream(t, []*pb.LanzRecord{testProtoBuf})
+func testStream() []byte {
+	return pbsToStream([]*pb.LanzRecord{testProtoBuf})
 }
 
 // This function tests that basic workflow works.
@@ -148,7 +149,7 @@ func TestSuccessPath(t *testing.T) {
 		},
 	}
 
-	conn := &testConnector{reader: bytes.NewReader(pbsToStream(t, pbs))}
+	conn := &testConnector{reader: bytes.NewReader(pbsToStream(pbs))}
 	ch := make(chan *pb.LanzRecord)
 	c, done := launchClient(ch, conn)
 	for i, p := range pbs {
@@ -195,7 +196,7 @@ func TestRetryOnConnectionError(t *testing.T) {
 // This function tests that the client will reconnect if the connection gets closed.
 func TestRetryOnClose(t *testing.T) {
 	conn := &testConnector{
-		reader:  bytes.NewReader(testStream(t)),
+		reader:  bytes.NewReader(testStream()),
 		connect: make(chan bool),
 	}
 
@@ -218,7 +219,7 @@ func TestRetryOnClose(t *testing.T) {
 // This function tests that the client will reconnect if it receives truncated input.
 func TestRetryOnTrucatedInput(t *testing.T) {
 	conn := &testConnector{
-		reader:  bytes.NewReader(testStream(t)[:5]),
+		reader:  bytes.NewReader(testStream()[:5]),
 		connect: make(chan bool),
 	}
 
@@ -236,7 +237,7 @@ func TestRetryOnTrucatedInput(t *testing.T) {
 
 // This function tests that the client will reconnect if it receives malformed input.
 func TestRetryOnMalformedInput(t *testing.T) {
-	stream := testStream(t)
+	stream := testStream()
 	uLen := binary.PutUvarint(stream, 3)
 	conn := &testConnector{
 		reader:  bytes.NewReader(stream[:uLen+3]),
@@ -256,7 +257,7 @@ func TestRetryOnMalformedInput(t *testing.T) {
 
 // This function tests the default connector.
 func TestDefaultConnector(t *testing.T) {
-	stream := testStream(t)
+	stream := testStream()
 	l, err := net.Listen("tcp", "127.0.0.1:0")
 	if err != nil {
 		t.Fatalf("Can't listen: %v", err)
@@ -264,7 +265,7 @@ func TestDefaultConnector(t *testing.T) {
 	go func() {
 		conn, err := l.Accept()
 		if err != nil {
-			t.Errorf("Can't accept: %v", err)
+			t.Fatalf("Can't accept: %v", err)
 		}
 		conn.Write(stream)
 		conn.Close()

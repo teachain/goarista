@@ -9,7 +9,7 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/teachain/goarista/netns"
+	"github.com/aristanetworks/goarista/netns"
 )
 
 func ExampleDo_httpClient() {

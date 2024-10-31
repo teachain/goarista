@@ -8,14 +8,11 @@ package main
 import (
 	"context"
 	"flag"
-	"fmt"
 	"io/ioutil"
 	"net/http"
-	"regexp"
 	"strings"
-	"sync"
 
-	"github.com/teachain/goarista/gnmi"
+	"github.com/aristanetworks/goarista/gnmi"
 
 	"github.com/aristanetworks/glog"
 	pb "github.com/openconfig/gnmi/proto/gnmi"
@@ -23,9 +20,6 @@ import (
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"golang.org/x/sync/errgroup"
 )
-
-// regex to match tags in descriptions e.g. "[foo][bar=baz]"
-const defaultDescriptionRegex = `\[([^=\]]+)(=[^]]+)?]`
 
 func main() {
 	// gNMI options
@@ -36,15 +30,7 @@ func main() {
 	flag.StringVar(&gNMIcfg.KeyFile, "keyfile", "", "Path to client TLS private key file")
 	flag.StringVar(&gNMIcfg.Username, "username", "", "Username to authenticate with")
 	flag.StringVar(&gNMIcfg.Password, "password", "", "Password to authenticate with")
-	descRegex := flag.String("description-regex", defaultDescriptionRegex, "custom regex to"+
-		" extract labels from description nodes")
-	enableDynDescs := flag.Bool("enable-description-labels", false, "disable attaching additional "+
-		"labels extracted from description nodes to closest list node children")
 	flag.BoolVar(&gNMIcfg.TLS, "tls", false, "Enable TLS")
-	flag.StringVar(&gNMIcfg.TLSMinVersion, "tls-min-version", "",
-		fmt.Sprintf("Set minimum TLS version for connection (%s)", gnmi.TLSVersions))
-	flag.StringVar(&gNMIcfg.TLSMaxVersion, "tls-max-version", "",
-		fmt.Sprintf("Set maximum TLS version for connection (%s)", gnmi.TLSVersions))
 	subscribePaths := flag.String("subscribe", "/", "Comma-separated list of paths to subscribe to")
 
 	// program options
@@ -72,14 +58,10 @@ func main() {
 	if subscriptions[0] == "/" {
 		subscriptions = subscriptions[1:]
 	}
-	// Add to the subscriptions in the config file.
-	config.addSubscriptions(subscriptions)
+	// Add the subscriptions from the config file.
+	subscriptions = append(subscriptions, config.Subscriptions...)
 
-	var r *regexp.Regexp
-	if *enableDynDescs {
-		r = regexp.MustCompile(*descRegex)
-	}
-	coll := newCollector(config, r)
+	coll := newCollector(config)
 	prometheus.MustRegister(coll)
 	ctx := gnmi.NewContext(context.Background(), gNMIcfg)
 	client, err := gnmi.Dial(gNMIcfg)
@@ -87,97 +69,26 @@ func main() {
 		glog.Fatal(err)
 	}
 
-	g, gCtx := errgroup.WithContext(ctx)
-	if *enableDynDescs {
-		// wait for initial sync to complete before continuing
-		wg := &sync.WaitGroup{}
-		wg.Add(1)
-		go func() {
-			if err := subscribeDescriptions(gCtx, client, config.DescriptionLabelSubscriptions,
-				coll, wg); err != nil {
-				glog.Error(err)
-			}
-		}()
-		wg.Wait()
-	}
-
-	for origin, paths := range config.subsByOrigin {
-		subscribeOptions := &gnmi.SubscribeOptions{
-			Mode:       "stream",
-			StreamMode: "target_defined",
-			Paths:      gnmi.SplitPaths(paths),
-			Origin:     origin,
-		}
-		g.Go(func() error {
-			return handleSubscription(gCtx, client, subscribeOptions, coll,
-				gNMIcfg.Addr)
-		})
-	}
-	http.Handle(*url, promhttp.Handler())
-	go http.ListenAndServe(*listenaddr, nil)
-	if err := g.Wait(); err != nil {
-		glog.Fatal(err)
-	}
-}
-
-func handleSubscription(ctx context.Context, client pb.GNMIClient,
-	subscribeOptions *gnmi.SubscribeOptions, coll *collector,
-	addr string) error {
 	respChan := make(chan *pb.SubscribeResponse)
-	go func() {
-		for resp := range respChan {
-			coll.update(addr, resp)
-		}
-	}()
-	return gnmi.SubscribeErr(ctx, client, subscribeOptions, respChan)
-}
-
-// subscribe to the descriptions nodes provided. It will parse the labels out based on the
-// default/user defined regex and store it in a map keyed by nearest lsit node.
-func subscribeDescriptions(ctx context.Context, client pb.GNMIClient, paths []string,
-	coll *collector, wg *sync.WaitGroup) error {
-	if len(paths) == 0 {
-		glog.V(9).Info("not subscribing to any description nodes as no paths found")
-		wg.Done()
-		return nil
-	}
-	var splitPaths [][]string
-	for _, p := range paths {
-		splitP := strings.Split(strings.TrimPrefix(p, "/"), "/")
-		splitPaths = append(splitPaths, splitP)
-	}
-
 	subscribeOptions := &gnmi.SubscribeOptions{
 		Mode:       "stream",
 		StreamMode: "target_defined",
-		Paths:      splitPaths,
+		Paths:      gnmi.SplitPaths(subscriptions),
 	}
-	respChan := make(chan *pb.SubscribeResponse)
-
-	go coll.handleDescriptionNodes(ctx, respChan, wg)
-
-	return gnmi.SubscribeErr(ctx, client, subscribeOptions, respChan)
+	go handleSubscription(ctx, client, subscribeOptions, respChan, coll, gNMIcfg.Addr)
+	http.Handle(*url, promhttp.Handler())
+	glog.Fatal(http.ListenAndServe(*listenaddr, nil))
 }
 
-// gets the nearest list node from the path, e.g. a/b[foo=bar]/c will return
-// a/b[foo=bar]
-func getNearestList(p *pb.Path) (*pb.Path, error) {
-	elms := p.GetElem()
-	var keyLoc int
-	for keyLoc = len(elms) - 1; keyLoc != 0; keyLoc-- {
-		if len(elms[keyLoc].GetKey()) == 0 {
-			continue
-		}
-		// support can be added for this if needs be, for now skip it for simplicity.
-		if len(elms[keyLoc].GetKey()) > 1 {
-			return nil, fmt.Errorf("skipping additional labels as it has multiple keys present "+
-				"for path %s", p)
-		}
-		break
+func handleSubscription(ctx context.Context, client pb.GNMIClient,
+	subscribeOptions *gnmi.SubscribeOptions, respChan chan *pb.SubscribeResponse, coll *collector,
+	addr string) {
+	var g errgroup.Group
+	g.Go(func() error { return gnmi.SubscribeErr(ctx, client, subscribeOptions, respChan) })
+	for resp := range respChan {
+		coll.update(addr, resp)
 	}
-	if keyLoc == 0 {
-		return nil, fmt.Errorf("unable to find nearest list nodes for path %s", p)
+	if err := g.Wait(); err != nil {
+		glog.Fatal(err)
 	}
-	p.Elem = p.GetElem()[:keyLoc+1]
-	return p, nil
 }

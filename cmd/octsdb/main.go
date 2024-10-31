@@ -9,14 +9,13 @@ import (
 	"context"
 	"encoding/json"
 	"flag"
-	"fmt"
 	"math"
 	"os"
 	"strconv"
 	"strings"
 	"time"
 
-	"github.com/teachain/goarista/gnmi"
+	"github.com/aristanetworks/goarista/gnmi"
 
 	"github.com/aristanetworks/glog"
 	pb "github.com/openconfig/gnmi/proto/gnmi"
@@ -34,13 +33,9 @@ func main() {
 	flag.StringVar(&cfg.Username, "username", "", "Username to authenticate with")
 	flag.StringVar(&cfg.Password, "password", "", "Password to authenticate with")
 	flag.BoolVar(&cfg.TLS, "tls", false, "Enable TLS")
-	flag.StringVar(&cfg.TLSMinVersion, "tls-min-version", "",
-		fmt.Sprintf("Set minimum TLS version for connection (%s)", gnmi.TLSVersions))
-	flag.StringVar(&cfg.TLSMaxVersion, "tls-max-version", "",
-		fmt.Sprintf("Set maximum TLS version for connection (%s)", gnmi.TLSVersions))
 
 	// Program options
-	subscribePaths := flag.String("paths", "", "Comma-separated list of paths to subscribe to")
+	subscribePaths := flag.String("paths", "/", "Comma-separated list of paths to subscribe to")
 
 	tsdbFlag := flag.String("tsdb", "",
 		"Address of the OpenTSDB server where to push telemetry to")
@@ -69,9 +64,11 @@ func main() {
 	if err != nil {
 		glog.Fatal(err)
 	}
-	var subscriptions []string
-	if *subscribePaths != "" {
-		subscriptions = strings.Split(*subscribePaths, ",")
+	// Ignore the default "subscribe-to-everything" subscription of the
+	// -subscribe flag.
+	subscriptions := strings.Split(*subscribePaths, ",")
+	if subscriptions[0] == "" {
+		subscriptions = subscriptions[1:]
 	}
 	// Add the subscriptions from the config file.
 	subscriptions = append(subscriptions, config.Subscriptions...)
@@ -139,14 +136,14 @@ func pushToOpenTSDB(addr string, conn OpenTSDBConn, config *Config, notif *pb.No
 	}
 	prefix := gnmi.StrPath(notif.Prefix)
 	for _, update := range notif.Update {
-		path := prefix + gnmi.StrPath(update.Path)
-		metricName, tags, staticValueMap := config.Match(path)
-		if metricName == "" {
-			glog.V(8).Infof("Ignoring unmatched update at %s ", path)
+		value := parseValue(update)
+		if value == nil {
 			continue
 		}
-		value := parseValue(update, staticValueMap)
-		if value == nil {
+		path := prefix + gnmi.StrPath(update.Path)
+		metricName, tags := config.Match(path)
+		if metricName == "" {
+			glog.V(8).Infof("Ignoring unmatched update at %s with value %+v", path, value)
 			continue
 		}
 		tags["host"] = host
@@ -170,7 +167,7 @@ func pushToOpenTSDB(addr string, conn OpenTSDBConn, config *Config, notif *pb.No
 // parseValue returns either an integer/floating point value of the given update, or if
 // the value is a slice of integers/floating point values. If the value is neither of these
 // or if any element in the slice is non numerical, parseValue returns nil.
-func parseValue(update *pb.Update, staticValueMap map[string]int64) []interface{} {
+func parseValue(update *pb.Update) []interface{} {
 	value, err := gnmi.ExtractValue(update)
 	if err != nil {
 		glog.Fatalf("Malformed JSON update %q in %s", update.Val.GetJsonVal(), update)
@@ -181,7 +178,7 @@ func parseValue(update *pb.Update, staticValueMap map[string]int64) []interface{
 		return []interface{}{value}
 	case uint64:
 		return []interface{}{value}
-	case float32, float64:
+	case float32:
 		return []interface{}{value}
 	case *pb.Decimal64:
 		val := gnmi.DecimalToFloat(value)
@@ -198,7 +195,7 @@ func parseValue(update *pb.Update, staticValueMap map[string]int64) []interface{
 				value[i] = val
 			case uint64:
 				value[i] = val
-			case float32, float64:
+			case float32:
 				value[i] = val
 			case *pb.Decimal64:
 				v := gnmi.DecimalToFloat(val)
@@ -208,15 +205,9 @@ func parseValue(update *pb.Update, staticValueMap map[string]int64) []interface{
 				value[i] = v
 			case json.Number:
 				value[i] = parseNumber(val, update)
-			case map[string]interface{}:
-				if num, ok := val["value"].(json.Number); ok && len(val) == 1 {
-					value[i] = parseNumber(num, update)
-				}
-			case string:
-				return parseString(val, staticValueMap)
 			default:
 				// If any value is not a number, skip it.
-				glog.V(3).Infof("Element %d: %v is %T, not json.Number", i, val, val)
+				glog.Infof("Element %d: %v is %T, not json.Number", i, val, val)
 				continue
 			}
 		}
@@ -227,23 +218,10 @@ func parseValue(update *pb.Update, staticValueMap map[string]int64) []interface{
 		if val, ok := value["value"].(json.Number); ok && len(value) == 1 {
 			return []interface{}{parseNumber(val, update)}
 		}
-	case string:
-		return parseString(value, staticValueMap)
-
 	default:
 		glog.V(9).Infof("Ignoring non-numeric or non-numeric slice value in %s", update)
 	}
 	return nil
-}
-
-func parseString(value string, staticValueMap map[string]int64) []interface{} {
-	if newval, ok := staticValueMap[value]; ok {
-		return []interface{}{newval}
-	} else if newval, ok := staticValueMap["default"]; ok {
-		return []interface{}{newval}
-	} else {
-		return nil
-	}
 }
 
 // Convert our json.Number to either an int64, uint64, or float64.
